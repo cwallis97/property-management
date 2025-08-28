@@ -1,0 +1,14 @@
+# Node / build stuff
+node_modules/
+dist/
+build/
+.vite/
+.eslintcache
+
+# OS/editor junk
+.DS_Store
+*.log
+
+# Env files
+.env
+.env.*

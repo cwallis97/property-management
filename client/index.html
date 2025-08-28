@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🏠 Property Manager</title>
+
+    <!-- Favicon (served from /public) -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+
+    <style>
+      :root{
+        --bg1:#111827; --bg2:#1f2937; --bg3:#4b5563;
+        --glow1:rgba(59,130,246,.35); /* blue */
+        --glow2:rgba(236,72,153,.35); /* pink */
+        --glow3:rgba(124,58,237,.28); /* purple */
+        --card:rgba(255,255,255,.08);
+        --text:#ffffff;
+        --accent1:#2563eb; --accent2:#7c3aed; --accent3:#ec4899;
+      }
+
+      html,body{
+        height:100%;
+      }
+      body{
+        margin:0;
+        font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        color:var(--text);
+        background: radial-gradient(1200px 800px at 15% 20%, var(--glow1), transparent 60%),
+                    radial-gradient(1000px 700px at 85% 80%, var(--glow2), transparent 60%),
+                    radial-gradient(900px 600px at 75% 15%, var(--glow3), transparent 60%),
+                    linear-gradient(135deg, var(--bg1), var(--bg2) 45%, var(--bg3));
+        overflow-x:hidden;
+      }
+
+      /* Subtle animated gradient shimmer */
+      body::before{
+        content:"";
+        position:fixed; inset:-10%;
+        background: conic-gradient(from 0deg, transparent 0 70%, rgba(255,255,255,.05) 70% 100%);
+        filter: blur(60px);
+        opacity:.35;
+        animation: spin 18s linear infinite;
+        pointer-events:none;
+      }
+      @keyframes spin{ to{ transform:rotate(360deg) } }
+
+      /* Floating glow orbs */
+      .orb{ position:fixed; border-radius:50%; filter: blur(40px); opacity:.28; pointer-events:none }
+      .orb.o1{ width:420px; height:420px; left:-120px; top:20vh; background:var(--glow1); animation: float1 9s ease-in-out infinite }
+      .orb.o2{ width:340px; height:340px; right:-100px; top:55vh; background:var(--glow2); animation: float2 11s ease-in-out infinite }
+      .orb.o3{ width:280px; height:280px; left:55vw; top:-120px; background:var(--glow3); animation: float3 13s ease-in-out infinite }
+      @keyframes float1{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-18px) } }
+      @keyframes float2{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(16px) } }
+      @keyframes float3{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-22px) } }
+
+      /* App mount container w/ glass card feel behind React root */
+      .frame{
+        min-height:100dvh;
+        display:grid;
+        place-items:center;
+        padding: clamp(16px, 3vw, 40px);
+      }
+      .glass{
+        position:relative;
+        width:min(1100px, 92vw);
+        min-height:72vh;
+        border-radius:24px;
+        background:var(--card);
+        backdrop-filter: blur(18px) saturate(130%);
+        -webkit-backdrop-filter: blur(18px) saturate(130%);
+        box-shadow:
+          0 10px 40px rgba(0,0,0,.45),
+          inset 0 0 0 1px rgba(255,255,255,.08);
+        overflow:hidden;
+        animation: fadeInUp .8s ease both;
+      }
+      .glass::after{
+        content:"";
+        position:absolute; inset:0;
+        background: linear-gradient(90deg, rgba(255,255,255,.06), transparent 40% 60%, rgba(255,255,255,.04));
+        pointer-events:none;
+      }
+      @keyframes fadeInUp{
+        from{ opacity:0; transform: translateY(14px) }
+        to{ opacity:1; transform: translateY(0) }
+      }
+
+      /* Header bar for global vibe */
+      .bar{
+        display:flex; align-items:center; justify-content:space-between;
+        gap:12px; padding:16px 20px;
+        border-bottom:1px solid rgba(255,255,255,.08);
+        background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      }
+      .brand{
+        display:flex; align-items:center; gap:12px; font-weight:800; letter-spacing:.3px
+      }
+      .brand-badge{
+        width:28px; height:28px; border-radius:8px;
+        background:linear-gradient(135deg, var(--accent1), var(--accent2) 60%, var(--accent3));
+        box-shadow:0 6px 18px rgba(37,99,235,.35), inset 0 0 12px rgba(255,255,255,.2);
+      }
+      .pill{
+        padding:10px 14px; border-radius:12px; font-weight:600;
+        background:linear-gradient(90deg, rgba(37,99,235,.22), rgba(124,58,237,.22));
+        border:1px solid rgba(255,255,255,.12);
+        text-decoration:none; color:#fff;
+        transition:transform .15s ease, box-shadow .2s ease, background .3s ease;
+      }
+      .pill:hover{
+        transform: translateY(-1px);
+        box-shadow:0 8px 22px rgba(0,0,0,.25);
+        background:linear-gradient(90deg, rgba(37,99,235,.32), rgba(124,58,237,.32));
+      }
+
+      /* Where React renders your actual pages */
+      #root{
+        padding: clamp(16px, 3vw, 28px);
+      }
+
+      /* Nice scrollbar */
+      ::-webkit-scrollbar{ width:10px }
+      ::-webkit-scrollbar-track{ background:#0f172a }
+      ::-webkit-scrollbar-thumb{
+        background: linear-gradient(180deg, var(--accent1), var(--accent2), var(--accent3));
+        border-radius:10px;
+      }
+
+      /* Respect reduced motion */
+      @media (prefers-reduced-motion: reduce){
+        *{ animation: none !important; transition:none !important }
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Ambient fancy glow orbs -->
+    <div class="orb o1"></div>
+    <div class="orb o2"></div>
+    <div class="orb o3"></div>
+
+    <!-- Glass frame around the app -->
+    <div class="frame">
+      <div class="glass">
+        <div class="bar">
+          <div class="brand">
+            <div class="brand-badge"></div>
+            <div>Property&nbsp;Manager</div>
+          </div>
+          <nav style="display:flex; gap:10px">
+            <a class="pill" href="/">Dashboard</a>
+            <a class="pill" href="/login">Login</a>
+            <a class="pill" href="/signup">Signup</a>
+          </nav>
+        </div>
+
+        <!-- React mounts your routes here -->
+        <div id="root"></div>
+      </div>
+    </div>
+
+    <!-- Vite loads your React app -->
+    <script type="module" src="/src/index.jsx"></script>
+  </body>
+</html>
