@@ -1,10 +1,14 @@
 // src/firebase.js
 import { initializeApp } from "firebase/app";
-import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { 
+  getAuth, 
+  setPersistence, 
+  browserLocalPersistence 
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// Your config (yours already has this filled in)
+// ✅ Your Firebase config (already filled in correctly)
 const firebaseConfig = {
   apiKey: "AIzaSyCOMHD2ViZH-5lv3SxSqayLGx5tfzPCGXM",
   authDomain: "wallisworks-42c74.firebaseapp.com",
@@ -14,15 +18,16 @@ const firebaseConfig = {
   appId: "1:93784898598:web:50b49a2ce0dcb71f33bae7",
 };
 
-// Initialize Firebase
+// ✅ Initialize Firebase core
 const app = initializeApp(firebaseConfig);
 
-// Auth service
+// ✅ Auth setup with session persistence
 const auth = getAuth(app);
-
-// ✅ Make login persist across page reloads
 setPersistence(auth, browserLocalPersistence);
 
-export { auth };
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+// ✅ Firestore (database) + Storage (for uploads)
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+// Exports
+export { auth, db, storage };
