@@ -1,164 +1,73 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../firebase";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { useState } from "react";
 
 export default function Signup() {
   const navigate = useNavigate();
-
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-  });
-
-  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const validate = () => {
-    let newErrors = {};
-    if (!formData.name.trim()) newErrors.name = "Name is required";
-    if (!formData.email.includes("@"))
-      newErrors.email = "Enter a valid email address";
-    if (formData.password.length < 6)
-      newErrors.password = "Password must be at least 6 characters";
-    if (formData.password !== formData.confirmPassword)
-      newErrors.confirmPassword = "Passwords do not match";
-    return newErrors;
-  };
-
-  const handleSignup = async (e) => {
+  async function handleSignup(e) {
     e.preventDefault();
-    const validationErrors = validate();
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
+    const email = e.target.email.value;
+    const password = e.target.password.value;
 
     try {
       setLoading(true);
-      setErrors({});
-
-      // Create user
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      );
-
-      // Save display name
-      await updateProfile(userCredential.user, {
-        displayName: formData.name,
-      });
-
-      navigate("/login");
+      await createUserWithEmailAndPassword(auth, email, password);
+      navigate("/dashboard");
     } catch (error) {
-      setErrors({ firebase: error.message });
+      alert(error.message);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-600 to-cyan-500">
-      <div className="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-md">
-        <h2 className="text-3xl font-extrabold mb-6 text-center text-gray-800">
-          Create Your Account
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-700 animate-gradient-xy">
+      <div className="relative bg-white/10 backdrop-blur-xl p-10 rounded-3xl shadow-2xl border border-white/20 w-full max-w-md">
+        <h2 className="text-3xl font-extrabold text-center text-white drop-shadow-lg mb-6">
+          Create Your Account ✨
         </h2>
-
-        {errors.firebase && (
-          <p className="text-red-500 text-sm text-center mb-4">
-            {errors.firebase}
-          </p>
-        )}
-
-        <form onSubmit={handleSignup} className="space-y-4">
-          {/* Name */}
+        <form onSubmit={handleSignup} className="space-y-6">
           <div>
-            <label className="block font-medium text-gray-700">Name</label>
+            <label className="block text-sm font-medium text-gray-200">Email</label>
             <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              className="w-full border rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-400 focus:outline-none"
-              placeholder="Enter your name"
-            />
-            {errors.name && (
-              <p className="text-red-500 text-sm mt-1">{errors.name}</p>
-            )}
-          </div>
-
-          {/* Email */}
-          <div>
-            <label className="block font-medium text-gray-700">Email</label>
-            <input
-              type="email"
               name="email"
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full border rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-400 focus:outline-none"
+              type="email"
               placeholder="Enter your email"
+              className="w-full px-4 py-3 mt-2 rounded-xl bg-white/20 border border-white/30 text-white placeholder-gray-300 focus:ring-2 focus:ring-pink-500 focus:outline-none transition"
             />
-            {errors.email && (
-              <p className="text-red-500 text-sm mt-1">{errors.email}</p>
-            )}
           </div>
-
-          {/* Password */}
           <div>
-            <label className="block font-medium text-gray-700">Password</label>
+            <label className="block text-sm font-medium text-gray-200">Password</label>
             <input
-              type="password"
               name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full border rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-400 focus:outline-none"
-              placeholder="••••••••"
-            />
-            {errors.password && (
-              <p className="text-red-500 text-sm mt-1">{errors.password}</p>
-            )}
-          </div>
-
-          {/* Confirm Password */}
-          <div>
-            <label className="block font-medium text-gray-700">
-              Confirm Password
-            </label>
-            <input
               type="password"
-              name="confirmPassword"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              className="w-full border rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-400 focus:outline-none"
               placeholder="••••••••"
+              className="w-full px-4 py-3 mt-2 rounded-xl bg-white/20 border border-white/30 text-white placeholder-gray-300 focus:ring-2 focus:ring-pink-500 focus:outline-none transition"
             />
-            {errors.confirmPassword && (
-              <p className="text-red-500 text-sm mt-1">
-                {errors.confirmPassword}
-              </p>
-            )}
           </div>
-
-          {/* Submit Button */}
+          <div>
+            <label className="block text-sm font-medium text-gray-200">Confirm Password</label>
+            <input
+              name="confirmPassword"
+              type="password"
+              placeholder="••••••••"
+              className="w-full px-4 py-3 mt-2 rounded-xl bg-white/20 border border-white/30 text-white placeholder-gray-300 focus:ring-2 focus:ring-pink-500 focus:outline-none transition"
+            />
+          </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+            className="w-full py-3 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-600 text-white font-bold rounded-xl shadow-lg hover:shadow-pink-500/50 transform hover:scale-105 transition-all duration-300 disabled:opacity-50"
           >
-            {loading ? "Creating account..." : "Sign Up"}
+            {loading ? "Creating..." : "Sign Up"}
           </button>
         </form>
-
-        <p className="mt-4 text-center text-gray-600">
+        <p className="text-sm text-gray-300 text-center mt-6">
           Already have an account?{" "}
-          <a href="/login" className="text-blue-600 hover:underline">
+          <a href="/login" className="text-pink-400 font-semibold hover:underline">
             Log in
           </a>
         </p>

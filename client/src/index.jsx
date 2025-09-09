@@ -1,7 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Login from "./pages/Login.jsx";  // 👈 FIXED PATH
+import Login from "./pages/Login.jsx";  
+import "./index.css";  // 👈 Tailwind CSS is loaded here
 
 function App() {
   return (
@@ -11,7 +12,7 @@ function App() {
         <Route
           path="/"
           element={
-            <h1 style={{ textAlign: "center", marginTop: "2rem" }}>
+            <h1 className="text-4xl font-bold text-blue-600 text-center mt-8">
               Dashboard (Home)
             </h1>
           }
