@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "../firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -5,77 +6,102 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 export default function Login() {
   const navigate = useNavigate();
 
-  async function handleLogin(e) {
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const validate = () => {
+    let newErrors = {};
+    if (!formData.email.includes("@")) newErrors.email = "Enter a valid email";
+    if (!formData.password) newErrors.password = "Password is required";
+    return newErrors;
+  };
+
+  const handleLogin = async (e) => {
     e.preventDefault();
-    const email = e.target.email.value;
-    const password = e.target.password.value;
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      alert("Login successful!");
+      setLoading(true);
+      setErrors({});
+      await signInWithEmailAndPassword(auth, formData.email, formData.password);
       navigate("/dashboard"); // go to dashboard after login
     } catch (error) {
-      console.error("Login error:", error.message);
-      alert(error.message);
+      setErrors({ firebase: error.message });
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <div style={{
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      height: "100vh",
-      background: "linear-gradient(135deg, #4c6ef5, #15aabf)"
-    }}>
-      <div style={{
-        background: "#fff",
-        padding: "2rem",
-        borderRadius: "16px",
-        boxShadow: "0 8px 20px rgba(0,0,0,0.1)",
-        width: "350px"
-      }}>
-        <h2 style={{ textAlign: "center", marginBottom: "1.5rem" }}>Login</h2>
-        <form onSubmit={handleLogin}>
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={{ fontWeight: "bold" }}>Email</label>
+    <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-600 to-cyan-500">
+      <div className="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-md">
+        <h2 className="text-3xl font-extrabold mb-6 text-center text-gray-800">
+          Welcome Back
+        </h2>
+
+        {errors.firebase && (
+          <p className="text-red-500 text-sm text-center mb-4">
+            {errors.firebase}
+          </p>
+        )}
+
+        <form onSubmit={handleLogin} className="space-y-4">
+          {/* Email */}
+          <div>
+            <label className="block font-medium text-gray-700">Email</label>
             <input
-              name="email"
               type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              className="w-full border rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-400 focus:outline-none"
               placeholder="Enter your email"
-              style={{ width: "100%", padding: "10px", marginTop: "5px", borderRadius: "8px", border: "1px solid #ccc" }}
             />
+            {errors.email && (
+              <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+            )}
           </div>
-          <div style={{ marginBottom: "1.5rem" }}>
-            <label style={{ fontWeight: "bold" }}>Password</label>
+
+          {/* Password */}
+          <div>
+            <label className="block font-medium text-gray-700">Password</label>
             <input
-              name="password"
               type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              className="w-full border rounded-lg px-3 py-2 mt-1 focus:ring-2 focus:ring-blue-400 focus:outline-none"
               placeholder="••••••••"
-              style={{ width: "100%", padding: "10px", marginTop: "5px", borderRadius: "8px", border: "1px solid #ccc" }}
             />
+            {errors.password && (
+              <p className="text-red-500 text-sm mt-1">{errors.password}</p>
+            )}
           </div>
+
+          {/* Submit Button */}
           <button
             type="submit"
-            style={{
-              width: "100%",
-              padding: "12px",
-              background: "#4c6ef5",
-              color: "#fff",
-              fontWeight: "bold",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              transition: "0.3s"
-            }}
-            onMouseOver={(e) => e.target.style.background = "#364fc7"}
-            onMouseOut={(e) => e.target.style.background = "#4c6ef5"}
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50"
           >
-            Sign In
+            {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
-        <p style={{ marginTop: "1rem", textAlign: "center" }}>
-          Don’t have an account? <a href="/signup">Sign up</a>
+
+        <p className="mt-4 text-center text-gray-600">
+          Don’t have an account?{" "}
+          <a href="/signup" className="text-blue-600 hover:underline">
+            Sign up
+          </a>
         </p>
       </div>
     </div>

@@ -3,19 +3,34 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
+import PublicRoute from "./components/PublicRoute";
 
 export default function App() {
   return (
     <Router>
       <Routes>
-        {/* Redirect root (/) to /login */}
-        <Route path="/" element={<Navigate to="/login" />} />
+        {/* Root → redirect to /login */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
 
-        {/* Auth routes */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
+        {/* Public routes (redirect if logged in) */}
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <Login />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/signup"
+          element={
+            <PublicRoute>
+              <Signup />
+            </PublicRoute>
+          }
+        />
 
-        {/* Main app */}
+        {/* Protected route (redirect if not logged in) */}
         <Route
           path="/dashboard"
           element={
@@ -24,6 +39,9 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Catch-all → redirect to root */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );
