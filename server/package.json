@@ -5,7 +5,12 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "start": "node index.js",
+    "migrate": "node db/migrate.js up",
+    "migrate:down": "node db/migrate.js down",
+    "migrate:down:all": "node db/migrate.js down:all",
+    "migrate:status": "node db/migrate.js status"
   },
   "keywords": [],
   "author": "",
@@ -13,7 +18,14 @@
   "type": "module",
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^5.1.0"
+    "dotenv": "^17.4.2",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "jwks-rsa": "^3.2.2",
+    "pg": "^8.22.0",
+    "pg-hstore": "^2.3.4",
+    "sequelize": "^6.37.8",
+    "umzug": "^3.8.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
