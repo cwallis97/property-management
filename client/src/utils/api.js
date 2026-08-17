@@ -54,3 +54,7 @@ export function getProperties() {
 export function getProperty(id) {
   return apiFetch(`/api/properties/${id}`);
 }
+
+export function getLocations(propertyId) {
+  return apiFetch(`/api/properties/${propertyId}/locations`);
+}
