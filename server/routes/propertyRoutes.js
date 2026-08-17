@@ -8,6 +8,7 @@ import {
   deleteProperty,
 } from "../controllers/propertyController.js";
 import pinRoutes from "./pinRoutes.js";
+import locationRoutes from "./locationRoutes.js";
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.put("/:id", updateProperty);
 router.delete("/:id", deleteProperty);
 
 router.use("/:propertyId/pins", pinRoutes);
+router.use("/:propertyId/locations", locationRoutes);
 
 export default router;

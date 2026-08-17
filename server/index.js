@@ -5,7 +5,7 @@ import { sequelize } from "./models/index.js";
 import propertyRoutes from "./routes/propertyRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import companyRoutes from "./routes/companyRoutes.js";
-import { pinRouter, repairRouter } from "./routes/detailRoutes.js";
+import { pinRouter, repairRouter, locationRouter } from "./routes/detailRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -17,6 +17,7 @@ app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/properties", propertyRoutes);
 app.use("/api/pins", pinRouter);
 app.use("/api/repairs", repairRouter);
+app.use("/api/locations", locationRouter);
 app.use("/api/users", userRoutes);
 app.use("/api/companies", companyRoutes);
 
