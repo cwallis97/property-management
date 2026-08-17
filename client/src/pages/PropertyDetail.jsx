@@ -4,13 +4,15 @@ import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import LocationList from "../components/LocationList";
 import AssetTable from "../components/AssetTable";
-import { IconBuilding, IconAlertTriangle, IconBox } from "../components/icons";
-import { getProperty, getLocations, getAssets } from "../utils/api";
+import WorkOrderTable from "../components/WorkOrderTable";
+import { IconBuilding, IconAlertTriangle, IconBox, IconWrench } from "../components/icons";
+import { getProperty, getLocations, getAssets, getWorkOrders } from "../utils/api";
 
 const TABS = [
   { key: "overview", label: "Overview" },
   { key: "locations", label: "Locations" },
   { key: "assets", label: "Assets" },
+  { key: "work-orders", label: "Work Orders" },
 ];
 
 function SectionSpinner() {
@@ -19,6 +21,43 @@ function SectionSpinner() {
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
     </div>
   );
+}
+
+function formatAge(ms) {
+  const minutes = Math.floor(Math.max(ms, 0) / 60000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
+// Only ever true when dueDate actually exists and has actually passed while
+// the work order is still incomplete — never inferred or assumed.
+function isOverdue(workOrder) {
+  if (!workOrder.dueDate || workOrder.status === "completed") return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(`${workOrder.dueDate}T00:00:00`);
+  return due < today;
+}
+
+// "What needs my attention first?" — completed work orders never rank
+// ahead of active ones, regardless of their priority/dueDate.
+function attentionRank(row) {
+  if (row.status === "completed") return 6;
+  if (row.priority === "urgent" && row.overdue) return 0;
+  if (row.priority === "urgent") return 1;
+  if (row.overdue) return 2;
+  if (row.priority === "high") return 3;
+  if (row.priority === "medium") return 4;
+  return 5; // low
+}
+
+function compareByAttention(a, b) {
+  const rankDiff = attentionRank(a) - attentionRank(b);
+  if (rankDiff !== 0) return rankDiff;
+  return a.createdAtMs - b.createdAtMs; // within the same group, older first
 }
 
 export default function PropertyDetail() {
@@ -37,10 +76,14 @@ export default function PropertyDetail() {
   const [assetsStatus, setAssetsStatus] = useState("loading"); // "loading" | "error" | "ready"
   const [assetsError, setAssetsError] = useState(null);
 
+  const [workOrders, setWorkOrders] = useState([]);
+  const [workOrdersStatus, setWorkOrdersStatus] = useState("loading"); // "loading" | "error" | "ready"
+  const [workOrdersError, setWorkOrdersError] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
 
-    // All three requests only need propertyId, which is already known from
+    // All four requests only need propertyId, which is already known from
     // the route — fire them together rather than chaining them, and track
     // each outcome independently so a failure in one never blocks the
     // others from displaying.
@@ -87,6 +130,19 @@ export default function PropertyDetail() {
         setAssetsStatus("error");
       });
 
+    setWorkOrdersStatus("loading");
+    getWorkOrders(propertyId)
+      .then((data) => {
+        if (cancelled) return;
+        setWorkOrders(data);
+        setWorkOrdersStatus("ready");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setWorkOrdersError(err.message);
+        setWorkOrdersStatus("error");
+      });
+
     return () => {
       cancelled = true;
     };
@@ -119,6 +175,71 @@ export default function PropertyDetail() {
       };
     });
   }, [assets, locations, locationsStatus]);
+
+  // Resolves each work order's Location/Asset relationship into a display
+  // label using only the already-loaded Locations/Assets — no per-row
+  // requests. Note that an asset or location referenced by a work order may
+  // have since been archived (archiving doesn't clear the reference), so it
+  // may not be present in these active-only lists; that falls back to "—"
+  // rather than crashing, same pattern used for Assets' Location lookup.
+  //
+  // The resulting rows are sorted attention-first (see compareByAttention)
+  // rather than left in API order. `.map()` always returns a brand-new
+  // array, so sorting it never mutates `workOrders`, the raw API response.
+  const workOrderRows = useMemo(() => {
+    const locationById = locationsStatus === "ready" ? new Map(locations.map((l) => [l.id, l])) : null;
+    const assetById = assetsStatus === "ready" ? new Map(assets.map((a) => [a.id, a])) : null;
+
+    const rows = workOrders.map((wo) => {
+      let wherePrimary;
+      let whereSecondary = null;
+
+      if (wo.assetId) {
+        const asset = assetById?.get(wo.assetId);
+        if (asset) {
+          wherePrimary = asset.name;
+          const locId = wo.locationId ?? asset.locationId;
+          if (locId) {
+            const location = locationById?.get(locId);
+            whereSecondary = location ? location.name : "—";
+          }
+        } else {
+          wherePrimary = "—";
+        }
+      } else if (wo.locationId) {
+        const location = locationById?.get(wo.locationId);
+        wherePrimary = location ? location.name : "—";
+      } else {
+        wherePrimary = "Property-level";
+      }
+
+      // Open/in-progress work orders show time-since-opened (a live,
+      // growing value). Completed ones instead show how long they took to
+      // resolve (createdAt -> completedAt, a fixed value) — both computed
+      // purely from real fields, nothing invented.
+      const createdAtDate = new Date(wo.createdAt);
+      const endTime = wo.status === "completed" && wo.completedAt ? new Date(wo.completedAt) : new Date();
+      const ageMs = endTime - createdAtDate;
+      const rawAge = formatAge(ageMs);
+
+      return {
+        id: wo.id,
+        title: wo.title,
+        wherePrimary,
+        whereSecondary,
+        priority: wo.priority,
+        status: wo.status,
+        ageLabel: wo.status === "completed" ? `Resolved in ${rawAge}` : rawAge,
+        overdue: isOverdue(wo),
+        createdAtMs: createdAtDate.getTime(),
+      };
+    });
+
+    return rows.sort(compareByAttention);
+  }, [workOrders, locations, locationsStatus, assets, assetsStatus]);
+
+  const urgentCount = workOrderRows.filter((row) => row.priority === "urgent" && row.status !== "completed").length;
+  const overdueCount = workOrderRows.filter((row) => row.overdue).length;
 
   if (propertyStatus === "loading") {
     return (
@@ -242,6 +363,41 @@ export default function PropertyDetail() {
           )}
 
           {assetsStatus === "ready" && assets.length > 0 && <AssetTable rows={assetRows} />}
+        </div>
+      )}
+
+      {activeTab === "work-orders" && (
+        <div>
+          {workOrdersStatus === "loading" && <SectionSpinner />}
+
+          {workOrdersStatus === "error" && (
+            <EmptyState
+              icon={IconAlertTriangle}
+              title="Couldn't load work orders"
+              description={workOrdersError || "Something went wrong while loading work orders. Please try again."}
+            />
+          )}
+
+          {workOrdersStatus === "ready" && workOrders.length === 0 && (
+            <EmptyState
+              icon={IconWrench}
+              title="No work orders yet"
+              description="Maintenance requests and repair tasks for this property will show up here."
+            />
+          )}
+
+          {workOrdersStatus === "ready" && workOrders.length > 0 && (
+            <div>
+              {(urgentCount > 0 || overdueCount > 0) && (
+                <div className="mb-4 flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm">
+                  <span className="font-medium text-gray-700">Needs attention:</span>
+                  {urgentCount > 0 && <span className="text-red-600">{urgentCount} urgent</span>}
+                  {overdueCount > 0 && <span className="text-amber-700">{overdueCount} overdue</span>}
+                </div>
+              )}
+              <WorkOrderTable rows={workOrderRows} />
+            </div>
+          )}
         </div>
       )}
     </div>
