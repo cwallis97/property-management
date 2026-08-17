@@ -66,3 +66,32 @@ export function getAssets(propertyId) {
 export function getWorkOrders(propertyId) {
   return apiFetch(`/api/properties/${propertyId}/work-orders`);
 }
+
+export function getWorkOrder(id) {
+  return apiFetch(`/api/work-orders/${id}`);
+}
+
+export function createWorkOrder(propertyId, payload) {
+  return apiFetch(`/api/properties/${propertyId}/work-orders`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateWorkOrder(id, payload) {
+  return apiFetch(`/api/work-orders/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getWorkOrderNotes(workOrderId) {
+  return apiFetch(`/api/work-orders/${workOrderId}/notes`);
+}
+
+export function createWorkOrderNote(workOrderId, body) {
+  return apiFetch(`/api/work-orders/${workOrderId}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}

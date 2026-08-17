@@ -138,3 +138,21 @@ export function IconActivity(props) {
     </Icon>
   );
 }
+
+export function IconX(props) {
+  return (
+    <Icon {...props}>
+      <line x1="6" y1="6" x2="18" y2="18" />
+      <line x1="18" y1="6" x2="6" y2="18" />
+    </Icon>
+  );
+}
+
+export function IconArrowLeft(props) {
+  return (
+    <Icon {...props}>
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <path d="m11 6-6 6 6 6" />
+    </Icon>
+  );
+}

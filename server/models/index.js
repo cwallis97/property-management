@@ -13,6 +13,7 @@ import {
   WORK_ORDER_STATUSES,
   WORK_ORDER_PRIORITIES,
 } from "./WorkOrder.js";
+import { initWorkOrderNoteModel, WorkOrderNote } from "./WorkOrderNote.js";
 
 initUserModel(sequelize);
 initCompanyModel(sequelize);
@@ -23,6 +24,7 @@ initRepairModel(sequelize);
 initLocationModel(sequelize);
 initAssetModel(sequelize);
 initWorkOrderModel(sequelize);
+initWorkOrderNoteModel(sequelize);
 
 User.belongsToMany(Company, { through: Membership, foreignKey: "userId", otherKey: "companyId", as: "companies" });
 Company.belongsToMany(User, { through: Membership, foreignKey: "companyId", otherKey: "userId", as: "users" });
@@ -63,6 +65,15 @@ WorkOrder.belongsTo(Location, { foreignKey: "locationId", as: "location" });
 Asset.hasMany(WorkOrder, { foreignKey: "assetId", as: "workOrders" });
 WorkOrder.belongsTo(Asset, { foreignKey: "assetId", as: "asset" });
 
+// No onDelete hint here (unlike the CASCADE associations above) — the real
+// constraint is RESTRICT, matching the same "protect history" reasoning
+// used for Location's self-referential parentLocationId.
+WorkOrder.hasMany(WorkOrderNote, { foreignKey: "workOrderId", as: "notes" });
+WorkOrderNote.belongsTo(WorkOrder, { foreignKey: "workOrderId", as: "workOrder" });
+
+User.hasMany(WorkOrderNote, { foreignKey: "authorUserId", as: "workOrderNotes" });
+WorkOrderNote.belongsTo(User, { foreignKey: "authorUserId", as: "author" });
+
 export {
   sequelize,
   User,
@@ -74,6 +85,7 @@ export {
   Location,
   Asset,
   WorkOrder,
+  WorkOrderNote,
   PIN_TYPES,
   SEVERITY_LEVELS,
   REPAIR_STATUSES,

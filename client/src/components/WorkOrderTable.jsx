@@ -2,14 +2,16 @@
 // bg-50/text-600 pill language (same pattern as AssetTable's status badges)
 // rather than introducing new colors. Only "high"/"urgent" get warm colors —
 // the rest stay neutral, so the table doesn't read as a rainbow.
-const priorityBadge = {
+// Exported so the Work Order detail page can reuse the exact same badge
+// language instead of redefining it.
+export const priorityBadge = {
   urgent: "bg-red-50 text-red-600 ring-1 ring-inset ring-red-100",
   high: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-100",
   medium: "bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-100",
   low: "bg-gray-50 text-gray-400 ring-1 ring-inset ring-gray-100",
 };
 
-const statusBadge = {
+export const statusBadge = {
   open: "bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-100",
   assigned: "bg-blue-50 text-blue-600 ring-1 ring-inset ring-blue-100",
   in_progress: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-100",
@@ -17,7 +19,7 @@ const statusBadge = {
   completed: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100",
 };
 
-const statusLabel = {
+export const statusLabel = {
   open: "Open",
   assigned: "Assigned",
   in_progress: "In Progress",
@@ -25,7 +27,7 @@ const statusLabel = {
   completed: "Completed",
 };
 
-export default function WorkOrderTable({ rows }) {
+export default function WorkOrderTable({ rows, onRowClick }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
       <table className="w-full text-left text-sm">
@@ -40,7 +42,11 @@ export default function WorkOrderTable({ rows }) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.id} className="border-b border-gray-50 last:border-0">
+            <tr
+              key={row.id}
+              onClick={() => onRowClick?.(row.id)}
+              className="cursor-pointer border-b border-gray-50 transition hover:bg-gray-50 last:border-0"
+            >
               <td className="px-5 py-3 font-medium text-gray-900">{row.title}</td>
               <td className="px-5 py-3">
                 <p className="text-gray-700">{row.wherePrimary}</p>

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import LocationList from "../components/LocationList";
 import AssetTable from "../components/AssetTable";
 import WorkOrderTable from "../components/WorkOrderTable";
-import { IconBuilding, IconAlertTriangle, IconBox, IconWrench } from "../components/icons";
+import CreateWorkOrderModal from "../components/CreateWorkOrderModal";
+import { IconBuilding, IconAlertTriangle, IconBox, IconWrench, IconPlus } from "../components/icons";
 import { getProperty, getLocations, getAssets, getWorkOrders } from "../utils/api";
+import { formatAge, isOverdue } from "../utils/workOrders";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -21,25 +23,6 @@ function SectionSpinner() {
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
     </div>
   );
-}
-
-function formatAge(ms) {
-  const minutes = Math.floor(Math.max(ms, 0) / 60000);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
-}
-
-// Only ever true when dueDate actually exists and has actually passed while
-// the work order is still incomplete — never inferred or assumed.
-function isOverdue(workOrder) {
-  if (!workOrder.dueDate || workOrder.status === "completed") return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(`${workOrder.dueDate}T00:00:00`);
-  return due < today;
 }
 
 // "What needs my attention first?" — completed work orders never rank
@@ -62,7 +45,13 @@ function compareByAttention(a, b) {
 
 export default function PropertyDetail() {
   const { propertyId } = useParams();
-  const [activeTab, setActiveTab] = useState("overview");
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Returning from a Work Order's detail page passes back which tab to
+  // land on (see WorkOrderDetail's back link), so the user doesn't lose
+  // their place after finishing an action.
+  const [activeTab, setActiveTab] = useState(location.state?.tab ?? "overview");
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const [property, setProperty] = useState(null);
   const [propertyStatus, setPropertyStatus] = useState("loading"); // "loading" | "error" | "not-found" | "ready"
@@ -378,27 +367,58 @@ export default function PropertyDetail() {
             />
           )}
 
-          {workOrdersStatus === "ready" && workOrders.length === 0 && (
-            <EmptyState
-              icon={IconWrench}
-              title="No work orders yet"
-              description="Maintenance requests and repair tasks for this property will show up here."
-            />
-          )}
+          {workOrdersStatus === "ready" && (
+            <>
+              <div className="mb-4 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+                >
+                  <IconPlus className="h-4 w-4" />
+                  Create Work Order
+                </button>
+              </div>
 
-          {workOrdersStatus === "ready" && workOrders.length > 0 && (
-            <div>
-              {(urgentCount > 0 || overdueCount > 0) && (
-                <div className="mb-4 flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm">
-                  <span className="font-medium text-gray-700">Needs attention:</span>
-                  {urgentCount > 0 && <span className="text-red-600">{urgentCount} urgent</span>}
-                  {overdueCount > 0 && <span className="text-amber-700">{overdueCount} overdue</span>}
+              {workOrders.length === 0 && (
+                <EmptyState
+                  icon={IconWrench}
+                  title="No work orders yet"
+                  description="Maintenance requests and repair tasks for this property will show up here."
+                />
+              )}
+
+              {workOrders.length > 0 && (
+                <div>
+                  {(urgentCount > 0 || overdueCount > 0) && (
+                    <div className="mb-4 flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm">
+                      <span className="font-medium text-gray-700">Needs attention:</span>
+                      {urgentCount > 0 && <span className="text-red-600">{urgentCount} urgent</span>}
+                      {overdueCount > 0 && <span className="text-amber-700">{overdueCount} overdue</span>}
+                    </div>
+                  )}
+                  <WorkOrderTable
+                    rows={workOrderRows}
+                    onRowClick={(id) => navigate(`/portfolio/${propertyId}/work-orders/${id}`)}
+                  />
                 </div>
               )}
-              <WorkOrderTable rows={workOrderRows} />
-            </div>
+            </>
           )}
         </div>
+      )}
+
+      {showCreateModal && (
+        <CreateWorkOrderModal
+          propertyId={propertyId}
+          locations={locations}
+          assets={assets}
+          onClose={() => setShowCreateModal(false)}
+          onCreated={(created) => {
+            setWorkOrders((prev) => [...prev, created]);
+            setShowCreateModal(false);
+          }}
+        />
       )}
     </div>
   );
