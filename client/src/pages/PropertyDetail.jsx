@@ -1,10 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import LocationList from "../components/LocationList";
-import { IconBuilding, IconAlertTriangle } from "../components/icons";
-import { getProperty, getLocations } from "../utils/api";
+import AssetTable from "../components/AssetTable";
+import { IconBuilding, IconAlertTriangle, IconBox } from "../components/icons";
+import { getProperty, getLocations, getAssets } from "../utils/api";
+
+const TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "locations", label: "Locations" },
+  { key: "assets", label: "Assets" },
+];
 
 function SectionSpinner() {
   return (
@@ -16,6 +23,7 @@ function SectionSpinner() {
 
 export default function PropertyDetail() {
   const { propertyId } = useParams();
+  const [activeTab, setActiveTab] = useState("overview");
 
   const [property, setProperty] = useState(null);
   const [propertyStatus, setPropertyStatus] = useState("loading"); // "loading" | "error" | "not-found" | "ready"
@@ -25,13 +33,17 @@ export default function PropertyDetail() {
   const [locationsStatus, setLocationsStatus] = useState("loading"); // "loading" | "error" | "ready"
   const [locationsError, setLocationsError] = useState(null);
 
+  const [assets, setAssets] = useState([]);
+  const [assetsStatus, setAssetsStatus] = useState("loading"); // "loading" | "error" | "ready"
+  const [assetsError, setAssetsError] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
 
-    // Both requests only need propertyId, which is already known from the
-    // route — fire them together rather than waiting on one another, and
-    // track their outcomes independently so a Locations failure never
-    // blocks a successfully loaded Property (or vice versa).
+    // All three requests only need propertyId, which is already known from
+    // the route — fire them together rather than chaining them, and track
+    // each outcome independently so a failure in one never blocks the
+    // others from displaying.
     setPropertyStatus("loading");
     getProperty(propertyId)
       .then((data) => {
@@ -62,10 +74,51 @@ export default function PropertyDetail() {
         setLocationsStatus("error");
       });
 
+    setAssetsStatus("loading");
+    getAssets(propertyId)
+      .then((data) => {
+        if (cancelled) return;
+        setAssets(data);
+        setAssetsStatus("ready");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setAssetsError(err.message);
+        setAssetsStatus("error");
+      });
+
     return () => {
       cancelled = true;
     };
   }, [propertyId]);
+
+  // Resolves each asset's locationId to a display label using the
+  // already-loaded Locations list — no per-asset requests. If Locations
+  // hasn't finished loading (or failed), assigned assets fall back to a
+  // neutral placeholder rather than showing nothing or crashing.
+  const assetRows = useMemo(() => {
+    const nameById = locationsStatus === "ready" ? new Map(locations.map((l) => [l.id, l.name])) : null;
+
+    return assets.map((asset) => {
+      let locationLabel;
+      if (!asset.locationId) {
+        locationLabel = "Property-level";
+      } else if (!nameById) {
+        locationLabel = "—";
+      } else {
+        locationLabel = nameById.get(asset.locationId) ?? "—";
+      }
+
+      return {
+        id: asset.id,
+        name: asset.name,
+        category: asset.category || "—",
+        locationPath: locationLabel,
+        status: asset.status,
+        installDate: asset.installDate || "",
+      };
+    });
+  }, [assets, locations, locationsStatus]);
 
   if (propertyStatus === "loading") {
     return (
@@ -109,43 +162,88 @@ export default function PropertyDetail() {
         description={property.address || "No address on file"}
       />
 
-      {property.sitePlanUrl && (
-        <a
-          href={property.sitePlanUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mb-6 inline-block text-sm font-medium text-blue-600 hover:underline"
-        >
-          View site plan
-        </a>
-      )}
+      <div className="mb-6 flex gap-6 border-b border-gray-200">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`border-b-2 pb-3 text-sm font-medium transition ${
+              activeTab === tab.key
+                ? "border-gray-900 text-gray-900"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      <div className="mt-8">
-        <div className="mb-3 flex items-center gap-2">
-          <IconBuilding className="h-4 w-4 text-gray-400" />
-          <h2 className="text-sm font-semibold text-gray-900">Locations</h2>
-        </div>
-
-        {locationsStatus === "loading" && <SectionSpinner />}
-
-        {locationsStatus === "error" && (
-          <EmptyState
-            icon={IconAlertTriangle}
-            title="Couldn't load locations"
-            description={locationsError || "Something went wrong while loading locations. Please try again."}
-          />
-        )}
-
-        {locationsStatus === "ready" && locations.length === 0 && (
+      {activeTab === "overview" &&
+        (property.sitePlanUrl ? (
+          <a
+            href={property.sitePlanUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block text-sm font-medium text-blue-600 hover:underline"
+          >
+            View site plan
+          </a>
+        ) : (
           <EmptyState
             icon={IconBuilding}
-            title="No locations yet"
-            description="Buildings, floors, units, and other locations added to this property will show up here."
+            title="No additional details"
+            description="Site plan and other property details will appear here once added."
           />
-        )}
+        ))}
 
-        {locationsStatus === "ready" && locations.length > 0 && <LocationList locations={locations} />}
-      </div>
+      {activeTab === "locations" && (
+        <div>
+          {locationsStatus === "loading" && <SectionSpinner />}
+
+          {locationsStatus === "error" && (
+            <EmptyState
+              icon={IconAlertTriangle}
+              title="Couldn't load locations"
+              description={locationsError || "Something went wrong while loading locations. Please try again."}
+            />
+          )}
+
+          {locationsStatus === "ready" && locations.length === 0 && (
+            <EmptyState
+              icon={IconBuilding}
+              title="No locations yet"
+              description="Buildings, floors, units, and other locations added to this property will show up here."
+            />
+          )}
+
+          {locationsStatus === "ready" && locations.length > 0 && <LocationList locations={locations} />}
+        </div>
+      )}
+
+      {activeTab === "assets" && (
+        <div>
+          {assetsStatus === "loading" && <SectionSpinner />}
+
+          {assetsStatus === "error" && (
+            <EmptyState
+              icon={IconAlertTriangle}
+              title="Couldn't load assets"
+              description={assetsError || "Something went wrong while loading assets. Please try again."}
+            />
+          )}
+
+          {assetsStatus === "ready" && assets.length === 0 && (
+            <EmptyState
+              icon={IconBox}
+              title="No assets yet"
+              description="Equipment and physical assets tracked for this property will show up here."
+            />
+          )}
+
+          {assetsStatus === "ready" && assets.length > 0 && <AssetTable rows={assetRows} />}
+        </div>
+      )}
     </div>
   );
 }
