@@ -2,15 +2,28 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
+import Portfolio from "./pages/Portfolio";
+import PropertyDetail from "./pages/PropertyDetail";
+import Assets from "./pages/Assets";
+import WorkOrders from "./pages/WorkOrders";
+import Vendors from "./pages/Vendors";
+import Documents from "./pages/Documents";
+import Settings from "./pages/Settings";
+import AppShell from "./layouts/AppShell";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PublicRoute from "./components/PublicRoute";
+import { DEV_BYPASS_AUTH } from "./components/devAuthBypass";
 
 export default function App() {
   return (
     <Router>
       <Routes>
-        {/* Root → redirect to /login */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        {/* Root → redirect to /login (or /dashboard in dev, since DEV_BYPASS_AUTH
+            skips the login screen entirely for local preview) */}
+        <Route
+          path="/"
+          element={<Navigate to={DEV_BYPASS_AUTH ? "/dashboard" : "/login"} replace />}
+        />
 
         {/* Public routes (redirect if logged in) */}
         <Route
@@ -30,15 +43,23 @@ export default function App() {
           }
         />
 
-        {/* Protected route (redirect if not logged in) */}
+        {/* Protected app shell (redirect if not logged in) */}
         <Route
-          path="/dashboard"
           element={
             <ProtectedRoute>
-              <Dashboard />
+              <AppShell />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/portfolio" element={<Portfolio />} />
+          <Route path="/portfolio/:propertyId" element={<PropertyDetail />} />
+          <Route path="/assets" element={<Assets />} />
+          <Route path="/work-orders" element={<WorkOrders />} />
+          <Route path="/vendors" element={<Vendors />} />
+          <Route path="/documents" element={<Documents />} />
+          <Route path="/settings" element={<Settings />} />
+        </Route>
 
         {/* Catch-all → redirect to root */}
         <Route path="*" element={<Navigate to="/" replace />} />
