@@ -4,6 +4,7 @@ import { getPin, updatePin, deletePin } from "../controllers/pinController.js";
 import { getRepair, updateRepair, deleteRepair } from "../controllers/repairController.js";
 import { getLocation, updateLocation, archiveLocation } from "../controllers/locationController.js";
 import { getAsset, updateAsset, archiveAsset } from "../controllers/assetController.js";
+import { getWorkOrder, updateWorkOrder, archiveWorkOrder } from "../controllers/workOrderController.js";
 
 const pinRouter = Router();
 pinRouter.use(requireAuth);
@@ -29,4 +30,10 @@ assetRouter.get("/:id", getAsset);
 assetRouter.put("/:id", updateAsset);
 assetRouter.delete("/:id", archiveAsset);
 
-export { pinRouter, repairRouter, locationRouter, assetRouter };
+const workOrderRouter = Router();
+workOrderRouter.use(requireAuth);
+workOrderRouter.get("/:id", getWorkOrder);
+workOrderRouter.put("/:id", updateWorkOrder);
+workOrderRouter.delete("/:id", archiveWorkOrder);
+
+export { pinRouter, repairRouter, locationRouter, assetRouter, workOrderRouter };

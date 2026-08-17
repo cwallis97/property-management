@@ -5,7 +5,7 @@ import { sequelize } from "./models/index.js";
 import propertyRoutes from "./routes/propertyRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import companyRoutes from "./routes/companyRoutes.js";
-import { pinRouter, repairRouter, locationRouter, assetRouter } from "./routes/detailRoutes.js";
+import { pinRouter, repairRouter, locationRouter, assetRouter, workOrderRouter } from "./routes/detailRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -19,6 +19,7 @@ app.use("/api/pins", pinRouter);
 app.use("/api/repairs", repairRouter);
 app.use("/api/locations", locationRouter);
 app.use("/api/assets", assetRouter);
+app.use("/api/work-orders", workOrderRouter);
 app.use("/api/users", userRoutes);
 app.use("/api/companies", companyRoutes);
 
