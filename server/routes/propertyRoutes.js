@@ -9,6 +9,7 @@ import {
 } from "../controllers/propertyController.js";
 import pinRoutes from "./pinRoutes.js";
 import locationRoutes from "./locationRoutes.js";
+import assetRoutes from "./assetRoutes.js";
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.delete("/:id", deleteProperty);
 
 router.use("/:propertyId/pins", pinRoutes);
 router.use("/:propertyId/locations", locationRoutes);
+router.use("/:propertyId/assets", assetRoutes);
 
 export default router;
