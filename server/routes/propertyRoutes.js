@@ -11,6 +11,7 @@ import pinRoutes from "./pinRoutes.js";
 import locationRoutes from "./locationRoutes.js";
 import assetRoutes from "./assetRoutes.js";
 import workOrderRoutes from "./workOrderRoutes.js";
+import sitePlanRoutes from "./sitePlanRoutes.js";
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use("/:propertyId/pins", pinRoutes);
 router.use("/:propertyId/locations", locationRoutes);
 router.use("/:propertyId/assets", assetRoutes);
 router.use("/:propertyId/work-orders", workOrderRoutes);
+router.use("/:propertyId/site-plan", sitePlanRoutes);
 
 export default router;

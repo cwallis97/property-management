@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
+import SectionSpinner from "../components/SectionSpinner";
 import { IconBuilding, IconAlertTriangle, IconWrench } from "../components/icons";
 import { priorityBadge, statusBadge, statusLabel } from "../components/WorkOrderTable";
 import { getDashboardSummary } from "../utils/api";
@@ -12,19 +13,14 @@ import { formatAge, isOverdue, needsAttention, compareByAttention, resolveWorkOr
 // Pulse/Property Pressure numbers below — it just isn't rendered as a row.
 const ATTENTION_LIMIT = 8;
 
-function SectionSpinner() {
+// One divided stat cell inside a single shared strip, not its own bordered
+// card — Portfolio Pulse is supporting context for Needs Attention above it,
+// not a fourth competing block of "card soup."
+function PulseStat({ label, value, accent }) {
   return (
-    <div className="flex items-center justify-center rounded-2xl border border-gray-200 bg-white py-16">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
-    </div>
-  );
-}
-
-function PulseTile({ label, value, accent }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
+    <div className="px-4 py-3.5 sm:px-5">
       <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
-      <p className={`mt-1.5 text-2xl font-semibold ${accent ? "text-red-600" : "text-gray-900"}`}>{value}</p>
+      <p className={`mt-1 text-xl font-semibold ${accent ? "text-red-600" : "text-gray-900"}`}>{value}</p>
     </div>
   );
 }
@@ -156,9 +152,16 @@ export default function Dashboard() {
       )}
 
       {status === "ready" && summary.properties.length > 0 && (
-        <div className="space-y-8">
+        <div className="space-y-10">
           <div>
-            <h2 className="mb-3 text-sm font-semibold text-gray-900">Needs Attention</h2>
+            <div className="mb-3 flex items-center gap-2.5">
+              <h2 className="text-lg font-semibold tracking-tight text-gray-900">Needs Attention</h2>
+              {attentionRows.length > 0 && (
+                <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600 ring-1 ring-inset ring-red-100">
+                  {attentionRows.length}
+                </span>
+              )}
+            </div>
 
             {attentionRows.length === 0 ? (
               <EmptyState
@@ -173,6 +176,7 @@ export default function Dashboard() {
                     <Link
                       key={row.id}
                       to={`/portfolio/${row.propertyId}/work-orders/${row.id}`}
+                      state={{ backLabel: "Dashboard", backTo: "/dashboard" }}
                       className="block px-5 py-4 transition hover:bg-gray-50"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
@@ -220,18 +224,19 @@ export default function Dashboard() {
           </div>
 
           <div>
-            <h2 className="mb-3 text-sm font-semibold text-gray-900">Portfolio Pulse</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <PulseTile label="Active Work Orders" value={rows.length} />
-              <PulseTile label="Needs Attention" value={attentionRows.length} accent={attentionRows.length > 0} />
-              <PulseTile label="Overdue" value={overdueCount} accent={overdueCount > 0} />
-              <PulseTile label="Critical Assets" value={criticalAssetCount} accent={criticalAssetCount > 0} />
-              <PulseTile label="Assets Needing Attention" value={needsAttentionAssetCount} />
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Portfolio Pulse</p>
+            <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white sm:grid-cols-5 sm:divide-y-0">
+              <PulseStat label="Active Work Orders" value={rows.length} />
+              <PulseStat label="Needs Attention" value={attentionRows.length} accent={attentionRows.length > 0} />
+              <PulseStat label="Overdue" value={overdueCount} accent={overdueCount > 0} />
+              <PulseStat label="Critical Assets" value={criticalAssetCount} accent={criticalAssetCount > 0} />
+              <PulseStat label="Assets Needing Attention" value={needsAttentionAssetCount} />
             </div>
           </div>
 
           <div>
-            <h2 className="mb-3 text-sm font-semibold text-gray-900">Property Pressure</h2>
+            <h2 className="mb-1 text-base font-semibold text-gray-900">Property Pressure</h2>
+            <p className="mb-3 text-xs text-gray-400">Open a property to investigate further.</p>
             <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
               {propertyPressure.map((property) => (
                 <Link

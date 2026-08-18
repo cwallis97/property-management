@@ -7,6 +7,7 @@ import {
   IconTruck,
   IconFolder,
   IconSettings,
+  IconActivity,
 } from "../components/icons";
 
 const navItems = [
@@ -14,6 +15,10 @@ const navItems = [
   { to: "/portfolio", label: "Portfolio", icon: IconBuilding },
   { to: "/assets", label: "Assets", icon: IconBox },
   { to: "/work-orders", label: "Work Orders", icon: IconWrench },
+  // Reporting is portfolio-wide, not scoped to one property, so it lives
+  // as a top-level pillar alongside Dashboard/Portfolio rather than inside
+  // any single property's own navigation.
+  { to: "/reports", label: "Reports", icon: IconActivity },
   { to: "/vendors", label: "Vendors", icon: IconTruck },
   { to: "/documents", label: "Documents", icon: IconFolder },
 ];

@@ -37,22 +37,26 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b border-gray-200 bg-white/80 px-8 backdrop-blur">
+      {/* Search and New are not wired to anything yet — disabled and
+          muted rather than styled as live primary actions, so they read as
+          "not built" instead of "broken." No ⌘K hint for a shortcut that
+          doesn't exist. */}
       <div className="relative w-full max-w-sm">
-        <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-300" />
         <input
           type="text"
-          placeholder="Search properties, assets, work orders..."
-          className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-12 text-sm text-gray-700 placeholder:text-gray-400 transition focus:border-gray-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-gray-900/5"
+          disabled
+          placeholder="Search coming soon"
+          className="w-full cursor-not-allowed rounded-lg border border-gray-100 bg-gray-50 py-2 pl-9 pr-3 text-sm text-gray-400 placeholder:text-gray-400"
         />
-        <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-gray-400">
-          ⌘K
-        </kbd>
       </div>
 
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+          disabled
+          title="Coming soon"
+          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-400"
         >
           <IconPlus className="h-4 w-4" />
           New
@@ -60,10 +64,11 @@ export default function Header() {
 
         <button
           type="button"
-          className="relative flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-gray-500 transition hover:border-gray-200 hover:bg-gray-50 hover:text-gray-700"
+          disabled
+          title="Coming soon"
+          className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-full border border-transparent text-gray-300"
         >
           <IconBell className="h-5 w-5" />
-          <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-red-500 ring-2 ring-white" />
         </button>
 
         <div className="relative ml-1">

@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import EmptyState from "../components/EmptyState";
+import SectionSpinner from "../components/SectionSpinner";
 import { IconAlertTriangle, IconArrowLeft, IconWrench } from "../components/icons";
 import { priorityBadge, statusBadge, statusLabel } from "../components/WorkOrderTable";
-import { formatAge, isOverdue, needsAttention as computeNeedsAttention, resolveWorkOrderContext } from "../utils/workOrders";
+import {
+  formatAge,
+  isOverdue,
+  needsAttention as computeNeedsAttention,
+  resolveWorkOrderContext,
+  ACTIVE_WORK_ORDER_STATUSES,
+  categoryLabel,
+} from "../utils/workOrders";
 import {
   getWorkOrder,
   getLocations,
@@ -11,16 +19,21 @@ import {
   updateWorkOrder,
   getWorkOrderNotes,
   createWorkOrderNote,
+  getWorkOrderCosts,
+  createWorkOrderCost,
 } from "../utils/api";
 
-const ACTIVE_STATUSES = ["open", "assigned", "in_progress", "waiting"];
+const COST_TYPES = [
+  { value: "labor", label: "Labor" },
+  { value: "material", label: "Material" },
+  { value: "vendor", label: "Vendor" },
+  { value: "equipment", label: "Equipment" },
+  { value: "other", label: "Other" },
+];
+const costTypeLabel = Object.fromEntries(COST_TYPES.map((t) => [t.value, t.label]));
 
-function SectionSpinner() {
-  return (
-    <div className="flex items-center justify-center rounded-2xl border border-gray-200 bg-white py-16">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
-    </div>
-  );
+function formatMoney(amount) {
+  return `$${Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatDueDate(dueDateStr) {
@@ -46,6 +59,15 @@ function formatNoteTimestamp(createdAt) {
   return `${datePart} · ${timePart}`;
 }
 
+function BackLink({ to, state, label }) {
+  return (
+    <Link to={to} state={state} className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition hover:text-gray-900">
+      <IconArrowLeft className="h-4 w-4" />
+      Back to {label}
+    </Link>
+  );
+}
+
 function SidebarSection({ title, children }) {
   return (
     <div>
@@ -55,9 +77,24 @@ function SidebarSection({ title, children }) {
   );
 }
 
+// Direct URL / refresh / any origin that didn't pass explicit state falls
+// back here — the property's own Work Orders tab, since propertyId is
+// always known from the route regardless of how this page was reached.
+function fallbackBackTarget(propertyId) {
+  return { backLabel: "Work Orders", backTo: `/portfolio/${propertyId}`, backTabState: { tab: "work-orders" } };
+}
+
 export default function WorkOrderDetail() {
   const { propertyId, workOrderId } = useParams();
-  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Return-to-origin navigation: whoever linked here (Dashboard, a
+  // property's Map/Overview/Work Orders tab, etc.) passes where "back"
+  // should actually go via router state — deliberately not browser history,
+  // since history could just as easily send the user outside PropertyOS.
+  const { backLabel, backTo, backTabState } = location.state?.backTo
+    ? location.state
+    : fallbackBackTarget(propertyId);
 
   const [workOrder, setWorkOrder] = useState(null);
   const [workOrderStatus, setWorkOrderStatus] = useState("loading"); // loading | error | not-found | ready
@@ -76,6 +113,16 @@ export default function WorkOrderDetail() {
   const [composerValue, setComposerValue] = useState("");
   const [submittingNote, setSubmittingNote] = useState(false);
   const [noteError, setNoteError] = useState(null);
+
+  const [costs, setCosts] = useState([]);
+  const [costsStatus, setCostsStatus] = useState("loading"); // loading | error | ready
+  const [costFormOpen, setCostFormOpen] = useState(false);
+  const [costType, setCostType] = useState("labor");
+  const [costAmount, setCostAmount] = useState("");
+  const [costNote, setCostNote] = useState("");
+  const [costDate, setCostDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [submittingCost, setSubmittingCost] = useState(false);
+  const [costError, setCostError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,14 +181,22 @@ export default function WorkOrderDetail() {
         setNotesStatus("error");
       });
 
+    setCostsStatus("loading");
+    getWorkOrderCosts(workOrderId)
+      .then((data) => {
+        if (cancelled) return;
+        setCosts(data);
+        setCostsStatus("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCostsStatus("error");
+      });
+
     return () => {
       cancelled = true;
     };
   }, [propertyId, workOrderId]);
-
-  function goBackToWorkOrders() {
-    navigate(`/portfolio/${propertyId}`, { state: { tab: "work-orders" } });
-  }
 
   async function applyStatus(nextStatus) {
     if (mutating) return;
@@ -154,6 +209,42 @@ export default function WorkOrderDetail() {
       setMutationError(err.message || "Something went wrong. Please try again.");
     } finally {
       setMutating(false);
+    }
+  }
+
+  async function handleAddCost(e) {
+    e.preventDefault();
+    if (submittingCost) return;
+
+    const amount = Number(costAmount);
+    if (!costAmount || !Number.isFinite(amount) || amount < 0) {
+      setCostError("Enter a valid, non-negative amount.");
+      return;
+    }
+    if (!costDate) {
+      setCostError("Cost date is required.");
+      return;
+    }
+
+    setSubmittingCost(true);
+    setCostError(null);
+    try {
+      const created = await createWorkOrderCost(workOrderId, {
+        type: costType,
+        amount,
+        note: costNote.trim() || undefined,
+        costDate,
+      });
+      setCosts((prev) => [...prev, created]);
+      setWorkOrder((prev) => (prev ? { ...prev, totalCost: prev.totalCost + created.amount } : prev));
+      setCostAmount("");
+      setCostNote("");
+      setCostDate(new Date().toISOString().slice(0, 10));
+      setCostFormOpen(false);
+    } catch (err) {
+      setCostError(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setSubmittingCost(false);
     }
   }
 
@@ -177,21 +268,27 @@ export default function WorkOrderDetail() {
 
   if (workOrderStatus === "not-found") {
     return (
-      <EmptyState
-        icon={IconWrench}
-        title="Work order not found"
-        description="This work order may have been removed, or the link is out of date."
-      />
+      <div className="mx-auto max-w-5xl">
+        <BackLink to={backTo} state={backTabState} label={backLabel} />
+        <EmptyState
+          icon={IconWrench}
+          title="Work order not found"
+          description="This work order may have been removed, or the link is out of date."
+        />
+      </div>
     );
   }
 
   if (workOrderStatus === "error") {
     return (
-      <EmptyState
-        icon={IconAlertTriangle}
-        title="Couldn't load this work order"
-        description={workOrderError || "Something went wrong. Please try again."}
-      />
+      <div className="mx-auto max-w-5xl">
+        <BackLink to={backTo} state={backTabState} label={backLabel} />
+        <EmptyState
+          icon={IconAlertTriangle}
+          title="Couldn't load this work order"
+          description={workOrderError || "Something went wrong. Please try again."}
+        />
+      </div>
     );
   }
 
@@ -219,14 +316,7 @@ export default function WorkOrderDetail() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <button
-        type="button"
-        onClick={goBackToWorkOrders}
-        className="mb-6 flex items-center gap-1.5 text-sm font-medium text-gray-500 transition hover:text-gray-900"
-      >
-        <IconArrowLeft className="h-4 w-4" />
-        Work Orders
-      </button>
+      <BackLink to={backTo} state={backTabState} label={backLabel} />
 
       {/* SITUATION HEADER — what is wrong, where, how serious, what state */}
       <div className="mb-6">
@@ -330,6 +420,115 @@ export default function WorkOrderDetail() {
               </div>
             </form>
           </div>
+
+          {/* COSTS — available regardless of status, including completed:
+              completion and financial reconciliation are related but
+              separate concerns (invoices/internal labor legitimately land
+              after the work itself is done). Total is always the sum of
+              real entries, never a separately-entered number. */}
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Costs</h2>
+              <span className="text-sm font-semibold text-gray-900">{formatMoney(workOrder.totalCost ?? 0)}</span>
+            </div>
+
+            {costsStatus === "loading" && <p className="text-sm text-gray-400">Loading costs…</p>}
+            {costsStatus === "error" && <p className="mb-3 text-sm text-red-600">Couldn't load costs. Please try again.</p>}
+
+            {costsStatus === "ready" && costs.length > 0 && (
+              <div className="mb-3 divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+                {costs.map((entry) => (
+                  <div key={entry.id} className="flex items-start justify-between gap-4 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{costTypeLabel[entry.type] || entry.type}</p>
+                      {entry.note && <p className="text-xs text-gray-500">{entry.note}</p>}
+                      <p className="text-xs text-gray-400">
+                        {formatDueDate(entry.costDate)} · {entry.createdBy?.name ?? "Unknown"}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-sm font-medium text-gray-900">{formatMoney(entry.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {costsStatus === "ready" && costs.length === 0 && !costFormOpen && (
+              <p className="mb-3 text-sm text-gray-400">No costs recorded yet.</p>
+            )}
+
+            {!costFormOpen ? (
+              <button
+                type="button"
+                onClick={() => setCostFormOpen(true)}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                Add Cost
+              </button>
+            ) : (
+              <form onSubmit={handleAddCost} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-wrap gap-1.5">
+                  {COST_TYPES.map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setCostType(t.value)}
+                      className={`rounded-lg px-2.5 py-1.5 text-sm font-medium transition ${
+                        costType === t.value ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-100"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={costAmount}
+                    onChange={(e) => setCostAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  />
+                  <input
+                    type="date"
+                    value={costDate}
+                    onChange={(e) => setCostDate(e.target.value)}
+                    className="w-40 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  />
+                </div>
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    value={costNote}
+                    onChange={(e) => setCostNote(e.target.value)}
+                    placeholder="Note (optional)"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  />
+                </div>
+                {costError && <p className="mt-1.5 text-sm text-red-600">{costError}</p>}
+                <div className="mt-3 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCostFormOpen(false);
+                      setCostError(null);
+                    }}
+                    className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-500 transition hover:text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingCost}
+                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {submittingCost ? "Saving…" : "Save Cost"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -338,7 +537,7 @@ export default function WorkOrderDetail() {
           <SidebarSection title="Status">
             {!isCompleted ? (
               <div className="inline-flex flex-wrap rounded-lg border border-gray-200 bg-gray-50 p-1">
-                {ACTIVE_STATUSES.map((s) => (
+                {ACTIVE_WORK_ORDER_STATUSES.map((s) => (
                   <button
                     key={s}
                     type="button"
@@ -366,6 +565,13 @@ export default function WorkOrderDetail() {
           <SidebarSection title="Asset">
             <p className={`text-sm ${assetLabel ? "text-gray-900" : "text-gray-400"}`}>{assetLabel ?? "No asset linked"}</p>
           </SidebarSection>
+
+          {(workOrder.category || workOrder.workType) && (
+            <SidebarSection title="Category">
+              <p className="text-sm text-gray-900">{categoryLabel[workOrder.category] || workOrder.category}</p>
+              {workOrder.workType && <p className="text-xs text-gray-500">{workOrder.workType.label}</p>}
+            </SidebarSection>
+          )}
 
           <SidebarSection title="Timing">
             <p className="text-sm text-gray-700">Reported {reportedAgo} ago</p>

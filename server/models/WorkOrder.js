@@ -1,4 +1,5 @@
 import { DataTypes, Model } from "sequelize";
+import { WORK_ORDER_CATEGORIES } from "./WorkType.js";
 
 export const WORK_ORDER_STATUSES = ["open", "assigned", "in_progress", "waiting", "completed"];
 export const WORK_ORDER_PRIORITIES = ["low", "medium", "high", "urgent"];
@@ -28,8 +29,36 @@ export function initWorkOrderModel(sequelize) {
       },
       dueDate: { type: DataTypes.DATEONLY, allowNull: true, field: "due_date" },
       completedAt: { type: DataTypes.DATE, allowNull: true, field: "completed_at" },
-      cost: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
+      // Structured maintenance classification — never required to create or
+      // complete a Work Order. category is a small validated set (same
+      // pattern as status/priority); workTypeId references a WorkType's
+      // stable identity, never a typed string, so renaming a WorkType's
+      // label later updates every historical Work Order's display for
+      // free. Actual cost lives in WorkOrderCostEntry (see association in
+      // models/index.js) and is always derived, never stored here.
+      category: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        validate: { isIn: [WORK_ORDER_CATEGORIES] },
+      },
+      workTypeId: { type: DataTypes.UUID, allowNull: true, field: "work_type_id" },
       photoUrls: { type: DataTypes.JSONB, allowNull: false, defaultValue: [], field: "photo_urls" },
+      // Normalized 0-100 position on the property's uploaded SitePlan —
+      // always both-or-neither (enforced in the controller). Independent of
+      // locationId: a Work Order's physical position and its place in the
+      // Location hierarchy are related but distinct concepts.
+      mapX: {
+        type: DataTypes.FLOAT,
+        allowNull: true,
+        field: "map_x",
+        validate: { min: 0, max: 100 },
+      },
+      mapY: {
+        type: DataTypes.FLOAT,
+        allowNull: true,
+        field: "map_y",
+        validate: { min: 0, max: 100 },
+      },
       archivedAt: { type: DataTypes.DATE, allowNull: true, field: "archived_at" },
     },
     {

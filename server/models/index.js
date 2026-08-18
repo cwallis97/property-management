@@ -14,6 +14,9 @@ import {
   WORK_ORDER_PRIORITIES,
 } from "./WorkOrder.js";
 import { initWorkOrderNoteModel, WorkOrderNote } from "./WorkOrderNote.js";
+import { initSitePlanModel, SitePlan, SITE_PLAN_ALLOWED_MIME_TYPES } from "./SitePlan.js";
+import { initWorkTypeModel, WorkType, WORK_ORDER_CATEGORIES } from "./WorkType.js";
+import { initWorkOrderCostEntryModel, WorkOrderCostEntry, WORK_ORDER_COST_TYPES } from "./WorkOrderCostEntry.js";
 
 initUserModel(sequelize);
 initCompanyModel(sequelize);
@@ -25,6 +28,9 @@ initLocationModel(sequelize);
 initAssetModel(sequelize);
 initWorkOrderModel(sequelize);
 initWorkOrderNoteModel(sequelize);
+initSitePlanModel(sequelize);
+initWorkTypeModel(sequelize);
+initWorkOrderCostEntryModel(sequelize);
 
 User.belongsToMany(Company, { through: Membership, foreignKey: "userId", otherKey: "companyId", as: "companies" });
 Company.belongsToMany(User, { through: Membership, foreignKey: "companyId", otherKey: "userId", as: "users" });
@@ -74,6 +80,28 @@ WorkOrderNote.belongsTo(WorkOrder, { foreignKey: "workOrderId", as: "workOrder" 
 User.hasMany(WorkOrderNote, { foreignKey: "authorUserId", as: "workOrderNotes" });
 WorkOrderNote.belongsTo(User, { foreignKey: "authorUserId", as: "author" });
 
+// One active SitePlan per Property (see the migration's unique index).
+Property.hasOne(SitePlan, { foreignKey: "propertyId", as: "sitePlan", onDelete: "CASCADE" });
+SitePlan.belongsTo(Property, { foreignKey: "propertyId", as: "property" });
+
+// WorkType is a reference/lookup table (global rows now, company-owned
+// rows in a future milestone) — WorkOrder points at a WorkType's stable
+// identity, never a typed string.
+Company.hasMany(WorkType, { foreignKey: "companyId", as: "workTypes", onDelete: "CASCADE" });
+WorkType.belongsTo(Company, { foreignKey: "companyId", as: "company" });
+
+WorkType.hasMany(WorkOrder, { foreignKey: "workTypeId", as: "workOrders" });
+WorkOrder.belongsTo(WorkType, { foreignKey: "workTypeId", as: "workType" });
+
+// Cost entries are append-only history, same RESTRICT-on-parent reasoning
+// as WorkOrderNote — a WorkOrder's financial record is never silently
+// deleted out from under it.
+WorkOrder.hasMany(WorkOrderCostEntry, { foreignKey: "workOrderId", as: "costEntries" });
+WorkOrderCostEntry.belongsTo(WorkOrder, { foreignKey: "workOrderId", as: "workOrder" });
+
+User.hasMany(WorkOrderCostEntry, { foreignKey: "createdByUserId", as: "workOrderCostEntries" });
+WorkOrderCostEntry.belongsTo(User, { foreignKey: "createdByUserId", as: "createdBy" });
+
 export {
   sequelize,
   User,
@@ -86,6 +114,12 @@ export {
   Asset,
   WorkOrder,
   WorkOrderNote,
+  SitePlan,
+  SITE_PLAN_ALLOWED_MIME_TYPES,
+  WorkType,
+  WORK_ORDER_CATEGORIES,
+  WorkOrderCostEntry,
+  WORK_ORDER_COST_TYPES,
   PIN_TYPES,
   SEVERITY_LEVELS,
   REPAIR_STATUSES,

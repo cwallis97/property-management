@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { IconX } from "./icons";
 import SearchableSelect from "./SearchableSelect";
+import SitePlanCanvas from "./SitePlanCanvas";
 import { getLocationPath } from "../utils/hierarchy";
-import { createWorkOrder } from "../utils/api";
+import { createWorkOrder, getSitePlan, getWorkTypes } from "../utils/api";
+import { useSitePlanFile } from "../utils/useSitePlanFile";
+import { WORK_ORDER_CATEGORIES } from "../utils/workOrders";
 
 const PRIORITIES = [
   { value: "low", label: "Low" },
@@ -11,7 +14,7 @@ const PRIORITIES = [
   { value: "urgent", label: "Urgent" },
 ];
 
-export default function CreateWorkOrderModal({ propertyId, locations, assets, onClose, onCreated }) {
+export default function CreateWorkOrderModal({ propertyId, locations, assets, initialMapPosition, onClose, onCreated }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [locationId, setLocationId] = useState(null);
@@ -20,6 +23,57 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, on
   const [dueDate, setDueDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+
+  const [category, setCategory] = useState(null);
+  const [workTypeId, setWorkTypeId] = useState(null);
+  const [workTypes, setWorkTypes] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getWorkTypes()
+      .then((data) => {
+        if (!cancelled) setWorkTypes(data);
+      })
+      .catch(() => {
+        // Classification is optional — if the list fails to load, the
+        // category buttons still work, there just won't be a Work Type
+        // picker underneath. Never blocks creating a Work Order.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Site-plan-awareness is independent of how this modal was opened — the
+  // plain "Create Work Order" button and the map's "Report Issue" flow both
+  // use this same modal, so it fetches this itself rather than requiring
+  // every caller to know/pass it.
+  const [sitePlan, setSitePlan] = useState(null);
+  const [sitePlanStatus, setSitePlanStatus] = useState("loading"); // loading | none | ready
+  const [mapStepOpen, setMapStepOpen] = useState(Boolean(initialMapPosition));
+  const [mapPosition, setMapPosition] = useState(initialMapPosition ?? null);
+  const [nudgedForPosition, setNudgedForPosition] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getSitePlan(propertyId)
+      .then((data) => {
+        if (cancelled) return;
+        setSitePlan(data);
+        setSitePlanStatus("ready");
+      })
+      .catch(() => {
+        // No site plan (404) or a transient fetch error — either way the
+        // map step just doesn't appear; it should never block creating a
+        // Work Order.
+        if (!cancelled) setSitePlanStatus("none");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [propertyId]);
+
+  const { status: fileStatus, fileUrl, fileObjectType } = useSitePlanFile(propertyId, sitePlanStatus === "ready" ? sitePlan : null);
 
   useEffect(() => {
     function handleEscape(e) {
@@ -62,12 +116,38 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, on
     return options;
   }, [assets, locations, effectiveLocationId]);
 
+  // Only meaningful once a category is chosen — a Work Type without a
+  // Category doesn't mean anything.
+  const workTypeOptions = useMemo(() => {
+    const options = [{ value: null, label: "No work type", sublabel: null }];
+    for (const workType of workTypes.filter((w) => w.category === category)) {
+      options.push({ value: workType.id, label: workType.label, sublabel: null });
+    }
+    return options;
+  }, [workTypes, category]);
+
+  function handleCategoryClick(value) {
+    setCategory((prev) => (prev === value ? null : value));
+    setWorkTypeId(null);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (submitting) return;
 
     if (!title.trim()) {
       setError("What's wrong? is required.");
+      return;
+    }
+
+    // Soft enforcement: when this property has a site plan, nudge once for
+    // a map position rather than silently allowing every physical Work
+    // Order to skip it — but never hard-block, since mapX/mapY are
+    // deliberately optional at the data level.
+    if (sitePlanStatus === "ready" && !mapPosition && !nudgedForPosition) {
+      setMapStepOpen(true);
+      setNudgedForPosition(true);
+      setError("This property has a site plan — mark the location on the map, or click Create Work Order again to skip.");
       return;
     }
 
@@ -79,6 +159,12 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, on
     if (effectiveLocationId) payload.locationId = effectiveLocationId;
     if (assetId) payload.assetId = assetId;
     if (dueDate) payload.dueDate = dueDate;
+    if (category) payload.category = category;
+    if (workTypeId) payload.workTypeId = workTypeId;
+    if (mapPosition) {
+      payload.mapX = mapPosition.x;
+      payload.mapY = mapPosition.y;
+    }
 
     try {
       const created = await createWorkOrder(propertyId, payload);
@@ -128,6 +214,36 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, on
           </div>
 
           <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-900">Category</label>
+            <div className="flex flex-wrap gap-1.5">
+              {WORK_ORDER_CATEGORIES.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => handleCategoryClick(c.value)}
+                  className={`rounded-lg px-2.5 py-1.5 text-sm font-medium transition ${
+                    category === c.value ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {category && (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-900">Work Type</label>
+              <SearchableSelect
+                value={workTypeId}
+                onChange={setWorkTypeId}
+                options={workTypeOptions}
+                placeholder="Select a work type (optional)"
+              />
+            </div>
+          )}
+
+          <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-900">Where</label>
             <SearchableSelect
               value={effectiveLocationId}
@@ -148,6 +264,46 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, on
               placeholder="Select an asset (optional)"
             />
           </div>
+
+          {sitePlanStatus === "ready" && (
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-900">Location on map</label>
+                {mapPosition && (
+                  <button
+                    type="button"
+                    onClick={() => setMapPosition(null)}
+                    className="text-xs font-medium text-gray-400 transition hover:text-gray-600"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {!mapStepOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setMapStepOpen(true)}
+                  className="w-full rounded-lg border border-dashed border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-500 transition hover:border-gray-400 hover:text-gray-700"
+                >
+                  Mark Location on Map
+                </button>
+              ) : (
+                <>
+                  <p className="mb-1.5 text-xs text-gray-400">Click the map to set the exact position.</p>
+                  <SitePlanCanvas
+                    fileStatus={fileStatus}
+                    fileUrl={fileUrl}
+                    fileObjectType={fileObjectType}
+                    height="260px"
+                    pickMode
+                    onPick={(x, y) => setMapPosition({ x, y })}
+                    pendingPoint={mapPosition}
+                  />
+                </>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-900">Priority</label>

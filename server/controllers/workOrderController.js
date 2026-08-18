@@ -4,8 +4,11 @@ import {
   Location,
   Asset,
   Property,
+  WorkType,
+  WorkOrderCostEntry,
   WORK_ORDER_STATUSES,
   WORK_ORDER_PRIORITIES,
+  WORK_ORDER_CATEGORIES,
 } from "../models/index.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -33,12 +36,12 @@ function isValidISODateTime(value) {
   return !Number.isNaN(new Date(value).getTime());
 }
 
-function isValidCost(value) {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
-
 function isValidPhotoUrls(value) {
   return Array.isArray(value) && value.every((v) => typeof v === "string");
+}
+
+function isValidMapCoordinate(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
 }
 
 async function findOwnedProperty(propertyId, companyIds) {
@@ -122,6 +125,30 @@ async function resolveAssetId(assetId, property, companyIds) {
   return { asset };
 }
 
+// Validates a candidate workTypeId: must exist, be visible to the caller's
+// company (global or company-owned), and not be archived — mirrors
+// resolveLocationId/resolveAssetId's shape. Archived WorkTypes remain
+// perfectly valid on WorkOrders that already reference them (nothing here
+// touches existing rows); this only guards NEW assignments.
+async function resolveWorkTypeId(workTypeId, companyIds) {
+  if (workTypeId === undefined || workTypeId === null) {
+    return { workType: null };
+  }
+  if (!isValidUUID(workTypeId)) {
+    return { error: { status: 400, body: { error: "Invalid workTypeId." } } };
+  }
+
+  const workType = await WorkType.findOne({
+    where: { id: workTypeId, [Op.or]: [{ companyId: null }, { companyId: { [Op.in]: companyIds } }] },
+  });
+  if (!workType) return { error: { status: 404, body: { error: "Work type not found." } } };
+  if (workType.archivedAt) {
+    return { error: { status: 400, body: { error: "Cannot assign an archived work type." } } };
+  }
+
+  return { workType };
+}
+
 // Shared scalar-field validation for create/update. Returns { error } or
 // { values } containing only the fields that were present in the body.
 function validateScalarFields(body) {
@@ -171,11 +198,11 @@ function validateScalarFields(body) {
     values.completedAt = body.completedAt;
   }
 
-  if (body.cost !== undefined) {
-    if (body.cost !== null && !isValidCost(body.cost)) {
-      return { error: { status: 400, body: { error: "cost must be a non-negative number." } } };
+  if (body.category !== undefined) {
+    if (body.category !== null && !WORK_ORDER_CATEGORIES.includes(body.category)) {
+      return { error: { status: 400, body: { error: `category must be one of: ${WORK_ORDER_CATEGORIES.join(", ")}` } } };
     }
-    values.cost = body.cost;
+    values.category = body.category;
   }
 
   if (body.photoUrls !== undefined) {
@@ -183,6 +210,21 @@ function validateScalarFields(body) {
       return { error: { status: 400, body: { error: "photoUrls must be an array of strings." } } };
     }
     values.photoUrls = body.photoUrls;
+  }
+
+  // A lone coordinate is meaningless, so mapX/mapY are always both-or-
+  // neither: either both are valid numbers in [0, 100], or both are
+  // explicitly null (clearing a position), or neither key is present.
+  if (body.mapX !== undefined || body.mapY !== undefined) {
+    const bothNull = body.mapX === null && body.mapY === null;
+    const bothValid = isValidMapCoordinate(body.mapX) && isValidMapCoordinate(body.mapY);
+    if (!bothNull && !bothValid) {
+      return {
+        error: { status: 400, body: { error: "mapX and mapY must both be numbers between 0 and 100, or both null." } },
+      };
+    }
+    values.mapX = body.mapX;
+    values.mapY = body.mapY;
   }
 
   return { values };
@@ -228,6 +270,14 @@ export async function createWorkOrder(req, res) {
     return res.status(400).json({ error: "locationId and assetId refer to different locations." });
   }
 
+  const { workType, error: workTypeError } = await resolveWorkTypeId(req.body.workTypeId, req.companyIds);
+  if (workTypeError) return res.status(workTypeError.status).json(workTypeError.body);
+
+  const finalCategory = values.category ?? null;
+  if (workType && finalCategory && workType.category !== finalCategory) {
+    return res.status(400).json({ error: "workTypeId must belong to the selected category." });
+  }
+
   // A non-completed work order must never retain a completedAt: reject an
   // explicit non-null value outright, and otherwise force it to null. A
   // completed work order uses the explicit value if one was given,
@@ -255,8 +305,11 @@ export async function createWorkOrder(req, res) {
     priority: values.priority ?? undefined,
     dueDate: values.dueDate ?? null,
     completedAt: resolvedCompletedAt,
-    cost: values.cost ?? null,
+    category: finalCategory,
+    workTypeId: workType ? workType.id : null,
     photoUrls: values.photoUrls ?? undefined,
+    mapX: values.mapX ?? null,
+    mapY: values.mapY ?? null,
   });
   res.status(201).json(workOrder);
 }
@@ -269,7 +322,21 @@ export async function getWorkOrder(req, res) {
   const workOrder = await findOwnedWorkOrder(req.params.id, req.companyIds);
   if (!workOrder) return res.status(404).json({ error: "Work order not found." });
 
-  res.json(workOrder);
+  // totalCost is always derived from the real cost entries, never a
+  // stored/editable number — a single aggregate query alongside the normal
+  // lookup, not a second source of truth to keep in sync.
+  const [workType, totalCostResult] = await Promise.all([
+    workOrder.workTypeId ? WorkType.findByPk(workOrder.workTypeId) : null,
+    WorkOrderCostEntry.sum("amount", { where: { workOrderId: workOrder.id } }),
+  ]);
+
+  res.json({
+    ...workOrder.toJSON(),
+    workType,
+    // Same string-vs-number caution as the cost entries themselves: don't
+    // trust the driver's aggregate result type, normalize explicitly.
+    totalCost: totalCostResult != null ? Number(totalCostResult) : 0,
+  });
 }
 
 export async function updateWorkOrder(req, res) {
@@ -312,6 +379,28 @@ export async function updateWorkOrder(req, res) {
     }
   }
 
+  const { workTypeId } = req.body;
+  let finalWorkTypeId = workOrder.workTypeId;
+  let resolvedWorkTypeForConsistency = null;
+
+  if (workTypeId !== undefined) {
+    const { workType, error } = await resolveWorkTypeId(workTypeId, req.companyIds);
+    if (error) return res.status(error.status).json(error.body);
+    finalWorkTypeId = workType ? workType.id : null;
+    resolvedWorkTypeForConsistency = workType;
+  }
+
+  const finalCategory = values.category !== undefined ? values.category : workOrder.category;
+
+  // Same "only re-check when something relevant changed" rule as
+  // location/asset above.
+  if ((workTypeId !== undefined || values.category !== undefined) && finalWorkTypeId && finalCategory) {
+    const relevantWorkType = resolvedWorkTypeForConsistency ?? (await WorkType.findByPk(finalWorkTypeId));
+    if (relevantWorkType && relevantWorkType.category !== finalCategory) {
+      return res.status(400).json({ error: "workTypeId must belong to the selected category." });
+    }
+  }
+
   // Same completion invariant as createWorkOrder, plus: staying completed
   // across an unrelated edit (no completedAt in this request) preserves the
   // existing timestamp rather than bumping it to now.
@@ -341,14 +430,32 @@ export async function updateWorkOrder(req, res) {
   if (values.status !== undefined) workOrder.status = values.status;
   if (values.priority !== undefined) workOrder.priority = values.priority;
   if (values.dueDate !== undefined) workOrder.dueDate = values.dueDate;
-  if (values.cost !== undefined) workOrder.cost = values.cost;
+  if (values.category !== undefined) workOrder.category = values.category;
+  if (workTypeId !== undefined) workOrder.workTypeId = finalWorkTypeId;
   if (values.photoUrls !== undefined) workOrder.photoUrls = values.photoUrls;
+  if (values.mapX !== undefined) {
+    workOrder.mapX = values.mapX;
+    workOrder.mapY = values.mapY;
+  }
   if (locationId !== undefined) workOrder.locationId = finalLocationId;
   if (assetId !== undefined) workOrder.assetId = finalAssetId;
   workOrder.completedAt = finalCompletedAt;
 
   await workOrder.save();
-  res.json(workOrder);
+
+  // Same enriched shape as getWorkOrder — WorkOrderDetail applies whatever
+  // this returns directly to its state, so it needs workType/totalCost
+  // here too or they'd disappear from the page after any edit.
+  const [workType, totalCostResult] = await Promise.all([
+    workOrder.workTypeId ? WorkType.findByPk(workOrder.workTypeId) : null,
+    WorkOrderCostEntry.sum("amount", { where: { workOrderId: workOrder.id } }),
+  ]);
+
+  res.json({
+    ...workOrder.toJSON(),
+    workType,
+    totalCost: totalCostResult != null ? Number(totalCostResult) : 0,
+  });
 }
 
 export async function archiveWorkOrder(req, res) {

@@ -19,13 +19,24 @@ function waitForFirebaseUser() {
   });
 }
 
-export async function apiFetch(path, options = {}) {
+async function getAuthToken() {
   const user = await waitForFirebaseUser();
   if (!user) {
     throw new Error("You must be signed in to do that.");
   }
+  return user.getIdToken();
+}
 
-  const token = await user.getIdToken();
+async function throwIfNotOk(res) {
+  if (res.ok) return;
+  const body = await res.json().catch(() => null);
+  const error = new Error(body?.error || `Request failed with status ${res.status}`);
+  error.status = res.status;
+  throw error;
+}
+
+export async function apiFetch(path, options = {}) {
+  const token = await getAuthToken();
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
@@ -36,14 +47,37 @@ export async function apiFetch(path, options = {}) {
     },
   });
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    const error = new Error(body?.error || `Request failed with status ${res.status}`);
-    error.status = res.status;
-    throw error;
-  }
+  await throwIfNotOk(res);
 
   if (res.status === 204) return null;
+  return res.json();
+}
+
+// For endpoints that return a raw file (not JSON) — same auth handling as
+// apiFetch, but resolves to a Blob so the caller can build an object URL.
+export async function apiFetchBlob(path) {
+  const token = await getAuthToken();
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  await throwIfNotOk(res);
+  return res.blob();
+}
+
+// For multipart file uploads — deliberately does NOT set Content-Type
+// itself, so the browser can attach the correct multipart boundary.
+export async function apiUpload(path, formData) {
+  const token = await getAuthToken();
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  await throwIfNotOk(res);
   return res.json();
 }
 
@@ -98,4 +132,52 @@ export function createWorkOrderNote(workOrderId, body) {
 
 export function getDashboardSummary() {
   return apiFetch("/api/dashboard/summary");
+}
+
+export function getSitePlan(propertyId) {
+  return apiFetch(`/api/properties/${propertyId}/site-plan`);
+}
+
+export function getSitePlanFileBlob(propertyId) {
+  return apiFetchBlob(`/api/properties/${propertyId}/site-plan/file`);
+}
+
+export function uploadSitePlan(propertyId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload(`/api/properties/${propertyId}/site-plan`, formData);
+}
+
+export function getWorkTypes() {
+  return apiFetch("/api/work-types");
+}
+
+export function getWorkOrderCosts(workOrderId) {
+  return apiFetch(`/api/work-orders/${workOrderId}/costs`);
+}
+
+export function createWorkOrderCost(workOrderId, payload) {
+  return apiFetch(`/api/work-orders/${workOrderId}/costs`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+// Drops undefined/null values before building a query string, so callers
+// can pass a filter object with optional keys directly.
+function toQueryString(params) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") query.set(key, value);
+  }
+  const str = query.toString();
+  return str ? `?${str}` : "";
+}
+
+export function getMaintenanceSpendSummary(params) {
+  return apiFetch(`/api/reports/maintenance-spend${toQueryString(params)}`);
+}
+
+export function getMaintenanceSpendWorkOrders(params) {
+  return apiFetch(`/api/reports/maintenance-spend/work-orders${toQueryString(params)}`);
 }
