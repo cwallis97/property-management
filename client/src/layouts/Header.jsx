@@ -1,21 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { auth } from "../firebase";
 import { signOut } from "firebase/auth";
-import { currentUser as mockUser } from "../mock/user";
 import { IconSearch, IconBell, IconPlus, IconChevronDown } from "../components/icons";
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
+  // auth.currentUser is synchronously null until Firebase finishes
+  // restoring the session (same hydration race documented in utils/api.js),
+  // so reading it directly at render time — as this used to — can render a
+  // stale/fallback value on first paint that never gets corrected until
+  // some unrelated re-render happens to occur. Subscribing here (same
+  // pattern as ProtectedRoute/PublicRoute) means the header updates itself
+  // the moment the real session resolves, with no fake data in between.
+  const [user, setUser] = useState(auth.currentUser);
 
-  const displayName =
-    auth.currentUser?.displayName || auth.currentUser?.email || mockUser.name;
-  const displayEmail = auth.currentUser?.email || mockUser.email;
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(setUser);
+    return () => unsubscribe();
+  }, []);
+
+  const displayName = user?.displayName || user?.email || null;
+  const displayEmail = user?.email || null;
   const initials = displayName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+    ? displayName
+        .split(" ")
+        .map((part) => part[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : null;
 
   async function handleLogout() {
     setMenuOpen(false);
@@ -76,9 +89,9 @@ export default function Header() {
               <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg shadow-gray-900/5">
                 <div className="px-3 py-2">
                   <p className="truncate text-sm font-medium text-gray-900">
-                    {displayName}
+                    {displayName ?? "Loading…"}
                   </p>
-                  <p className="truncate text-xs text-gray-500">{displayEmail}</p>
+                  <p className="truncate text-xs text-gray-500">{displayEmail ?? ""}</p>
                 </div>
                 <div className="my-1 h-px bg-gray-100" />
                 <button

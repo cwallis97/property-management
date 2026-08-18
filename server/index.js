@@ -7,6 +7,7 @@ import userRoutes from "./routes/userRoutes.js";
 import companyRoutes from "./routes/companyRoutes.js";
 import { pinRouter, repairRouter, locationRouter, assetRouter, workOrderRouter } from "./routes/detailRoutes.js";
 import workOrderNoteRoutes from "./routes/workOrderNoteRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -22,6 +23,7 @@ app.use("/api/locations", locationRouter);
 app.use("/api/assets", assetRouter);
 app.use("/api/work-orders", workOrderRouter);
 app.use("/api/work-orders", workOrderNoteRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/companies", companyRoutes);
 

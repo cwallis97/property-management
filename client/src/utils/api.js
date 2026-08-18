@@ -95,3 +95,7 @@ export function createWorkOrderNote(workOrderId, body) {
     body: JSON.stringify({ body }),
   });
 }
+
+export function getDashboardSummary() {
+  return apiFetch("/api/dashboard/summary");
+}

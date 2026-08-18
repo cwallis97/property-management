@@ -8,7 +8,7 @@ import WorkOrderTable from "../components/WorkOrderTable";
 import CreateWorkOrderModal from "../components/CreateWorkOrderModal";
 import { IconBuilding, IconAlertTriangle, IconBox, IconWrench, IconPlus } from "../components/icons";
 import { getProperty, getLocations, getAssets, getWorkOrders } from "../utils/api";
-import { formatAge, isOverdue } from "../utils/workOrders";
+import { formatAge, isOverdue, compareByAttention } from "../utils/workOrders";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -23,24 +23,6 @@ function SectionSpinner() {
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
     </div>
   );
-}
-
-// "What needs my attention first?" — completed work orders never rank
-// ahead of active ones, regardless of their priority/dueDate.
-function attentionRank(row) {
-  if (row.status === "completed") return 6;
-  if (row.priority === "urgent" && row.overdue) return 0;
-  if (row.priority === "urgent") return 1;
-  if (row.overdue) return 2;
-  if (row.priority === "high") return 3;
-  if (row.priority === "medium") return 4;
-  return 5; // low
-}
-
-function compareByAttention(a, b) {
-  const rankDiff = attentionRank(a) - attentionRank(b);
-  if (rankDiff !== 0) return rankDiff;
-  return a.createdAtMs - b.createdAtMs; // within the same group, older first
 }
 
 export default function PropertyDetail() {

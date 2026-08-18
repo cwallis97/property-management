@@ -3,8 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import EmptyState from "../components/EmptyState";
 import { IconAlertTriangle, IconArrowLeft, IconWrench } from "../components/icons";
 import { priorityBadge, statusBadge, statusLabel } from "../components/WorkOrderTable";
-import { getLocationPath } from "../utils/hierarchy";
-import { formatAge, isOverdue } from "../utils/workOrders";
+import { formatAge, isOverdue, needsAttention as computeNeedsAttention, resolveWorkOrderContext } from "../utils/workOrders";
 import {
   getWorkOrder,
   getLocations,
@@ -22,21 +21,6 @@ function SectionSpinner() {
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
     </div>
   );
-}
-
-// Resolves Location and Asset the same way the previous refinement did:
-// asset's own location is used when the work order has no explicit
-// locationId of its own, full ancestor breadcrumb via getLocationPath,
-// "—" fallback if the referenced Location/Asset has since been archived.
-// Nothing here assumes any particular hierarchy shape.
-function resolveLocationAndAsset(workOrder, locations, assets) {
-  const asset = workOrder.assetId ? assets.find((a) => a.id === workOrder.assetId) : null;
-  const assetLabel = !workOrder.assetId ? null : asset ? asset.name : "—";
-
-  const locationId = workOrder.locationId ?? asset?.locationId ?? null;
-  const locationLabel = locationId ? getLocationPath(locationId, locations).join(" › ") || "—" : null;
-
-  return { locationLabel, assetLabel };
 }
 
 function formatDueDate(dueDateStr) {
@@ -214,7 +198,7 @@ export default function WorkOrderDetail() {
   const locationsReady = locationsStatus === "ready";
   const assetsReady = assetsStatus === "ready";
   const { locationLabel, assetLabel } =
-    locationsReady && assetsReady ? resolveLocationAndAsset(workOrder, locations, assets) : { locationLabel: "…", assetLabel: "…" };
+    locationsReady && assetsReady ? resolveWorkOrderContext(workOrder, locations, assets) : { locationLabel: "…", assetLabel: "…" };
   const leafLocationName = locationLabel && locationLabel !== "…" ? locationLabel.split(" › ").pop() : locationLabel;
 
   const overdue = isOverdue(workOrder);
@@ -228,7 +212,7 @@ export default function WorkOrderDetail() {
   const resolutionEndTime = isCompleted && workOrder.completedAt ? new Date(workOrder.completedAt) : new Date();
   const resolutionAge = formatAge(resolutionEndTime - createdAt);
 
-  const needsAttention = (workOrder.priority === "urgent" && !isCompleted) || overdue;
+  const needsAttentionNow = computeNeedsAttention(workOrder);
   const attentionParts = [];
   if (workOrder.priority === "urgent" && !isCompleted) attentionParts.push("Urgent");
   if (overdue) attentionParts.push(`Overdue by ${formatOverdueBy(workOrder.dueDate)}`);
@@ -274,7 +258,7 @@ export default function WorkOrderDetail() {
 
       {/* ATTENTION — only for work orders that actually need it, derived
           entirely from real data (priority + dueDate), never decorative. */}
-      {needsAttention && (
+      {needsAttentionNow && (
         <div className="mb-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Attention</p>
           <p className="mt-1 text-sm font-medium text-red-900">{attentionParts.join(" · ")}</p>
