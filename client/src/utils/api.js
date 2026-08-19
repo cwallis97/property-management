@@ -101,6 +101,13 @@ export function getAsset(id) {
   return apiFetch(`/api/assets/${id}`);
 }
 
+export function createAsset(propertyId, payload) {
+  return apiFetch(`/api/properties/${propertyId}/assets`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 // Portfolio-wide — every Asset across every Property the caller's company
 // owns. All | Needs Attention | Critical and Property filtering both
 // happen client-side over this one fetch, same convention as Portfolio

@@ -10,6 +10,7 @@ import AssetTable from "../components/AssetTable";
 import WorkOrderTable, { priorityBadge, statusBadge, statusLabel } from "../components/WorkOrderTable";
 import WorkOrderViewFilter from "../components/WorkOrderViewFilter";
 import CreateWorkOrderModal from "../components/CreateWorkOrderModal";
+import CreateAssetModal from "../components/CreateAssetModal";
 import { IconBuilding, IconAlertTriangle, IconBox, IconWrench, IconPlus } from "../components/icons";
 import { getProperty, getLocations, getAssets, getWorkOrders } from "../utils/api";
 import { formatAge, isOverdue, needsAttention, compareByAttention, filterWorkOrdersByView } from "../utils/workOrders";
@@ -63,6 +64,7 @@ export default function PropertyDetail() {
   // their place after finishing an action.
   const [activeTab, setActiveTab] = useState(location.state?.tab ?? "overview");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateAssetModal, setShowCreateAssetModal] = useState(false);
   // Same return-to-origin pattern as activeTab: opening a completed Work
   // Order from the Completed view and clicking back should land back on
   // Completed, not silently reset to the Active default.
@@ -597,28 +599,43 @@ export default function PropertyDetail() {
             />
           )}
 
-          {assetsStatus === "ready" && assets.length === 0 && (
-            <EmptyState
-              icon={IconBox}
-              title="No assets yet"
-              description="Equipment and physical assets tracked for this property will show up here."
-            />
-          )}
+          {assetsStatus === "ready" && (
+            <>
+              <div className="mb-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateAssetModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+                >
+                  <IconPlus className="h-4 w-4" />
+                  Add Asset
+                </button>
+              </div>
 
-          {assetsStatus === "ready" && assets.length > 0 && (
-            <AssetTable
-              rows={assetRows}
-              initialQuery={assetsInitialQuery}
-              onRowClick={(id) =>
-                navigate(`/portfolio/${propertyId}/assets/${id}`, {
-                  state: {
-                    backLabel: "Assets",
-                    backTo: `/portfolio/${propertyId}`,
-                    backTabState: { tab: "assets" },
-                  },
-                })
-              }
-            />
+              {assets.length === 0 && (
+                <EmptyState
+                  icon={IconBox}
+                  title="No assets yet"
+                  description="Equipment and physical assets tracked for this property will show up here."
+                />
+              )}
+
+              {assets.length > 0 && (
+                <AssetTable
+                  rows={assetRows}
+                  initialQuery={assetsInitialQuery}
+                  onRowClick={(id) =>
+                    navigate(`/portfolio/${propertyId}/assets/${id}`, {
+                      state: {
+                        backLabel: "Assets",
+                        backTo: `/portfolio/${propertyId}`,
+                        backTabState: { tab: "assets" },
+                      },
+                    })
+                  }
+                />
+              )}
+            </>
           )}
         </div>
       )}
@@ -729,6 +746,18 @@ export default function PropertyDetail() {
           onCreated={(created) => {
             setWorkOrders((prev) => [...prev, created]);
             setShowCreateModal(false);
+          }}
+        />
+      )}
+
+      {showCreateAssetModal && (
+        <CreateAssetModal
+          propertyId={propertyId}
+          locations={locations}
+          onClose={() => setShowCreateAssetModal(false)}
+          onCreated={(created) => {
+            setAssets((prev) => [...prev, created]);
+            setShowCreateAssetModal(false);
           }}
         />
       )}
