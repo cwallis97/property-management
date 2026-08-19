@@ -9,6 +9,7 @@ import { pinRouter, repairRouter, locationRouter, assetRouter, workOrderRouter }
 import workOrderNoteRoutes from "./routes/workOrderNoteRoutes.js";
 import workOrderCostRoutes from "./routes/workOrderCostRoutes.js";
 import workTypeRoutes from "./routes/workTypeRoutes.js";
+import vendorRoutes from "./routes/vendorRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -29,6 +30,7 @@ app.use("/api/work-orders", workOrderRouter);
 app.use("/api/work-orders", workOrderNoteRoutes);
 app.use("/api/work-orders", workOrderCostRoutes);
 app.use("/api/work-types", workTypeRoutes);
+app.use("/api/vendors", vendorRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/users", userRoutes);

@@ -6,10 +6,12 @@ import {
   Property,
   WorkType,
   WorkOrderCostEntry,
+  WorkOrderVendor,
   WORK_ORDER_STATUSES,
   WORK_ORDER_PRIORITIES,
   WORK_ORDER_CATEGORIES,
 } from "../models/index.js";
+import { resolveVendorId } from "./vendorController.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -353,6 +355,17 @@ export async function createWorkOrder(req, res) {
   res.status(201).json(workOrder);
 }
 
+// An array, honestly reflecting the schema (see WorkOrderVendor's
+// migration) even though V1's UI only ever writes one row — never a
+// separate "the" vendor field to keep in sync with the join table. Only
+// `current` rows — this answers "who is presently assigned," not "who has
+// ever been assigned" (that's Vendor Detail's Work History, derived the
+// other direction, unfiltered by `current`).
+async function getVendorsForWorkOrder(workOrderId) {
+  const links = await WorkOrderVendor.findAll({ where: { workOrderId, current: true }, include: [{ association: "vendor" }] });
+  return links.map((l) => l.vendor);
+}
+
 export async function getWorkOrder(req, res) {
   if (!isValidUUID(req.params.id)) {
     return res.status(400).json({ error: "Invalid work order id." });
@@ -364,14 +377,16 @@ export async function getWorkOrder(req, res) {
   // totalCost is always derived from the real cost entries, never a
   // stored/editable number — a single aggregate query alongside the normal
   // lookup, not a second source of truth to keep in sync.
-  const [workType, totalCostResult] = await Promise.all([
+  const [workType, totalCostResult, vendors] = await Promise.all([
     workOrder.workTypeId ? WorkType.findByPk(workOrder.workTypeId) : null,
     WorkOrderCostEntry.sum("amount", { where: { workOrderId: workOrder.id } }),
+    getVendorsForWorkOrder(workOrder.id),
   ]);
 
   res.json({
     ...workOrder.toJSON(),
     workType,
+    vendors,
     // Same string-vs-number caution as the cost entries themselves: don't
     // trust the driver's aggregate result type, normalize explicitly.
     totalCost: totalCostResult != null ? Number(totalCostResult) : 0,
@@ -440,6 +455,21 @@ export async function updateWorkOrder(req, res) {
     }
   }
 
+  // V1's "one Vendor" UI is enforced here, not in the schema — a present
+  // vendorId REPLACES whatever WorkOrderVendor row(s) already exist for
+  // this Work Order (null clears the assignment entirely). This never
+  // touches WorkOrderCostEntry.vendorId on any existing cost entry — a
+  // Work Order's current Vendor assignment and a cost entry's own Vendor
+  // attribution are independent, so changing/removing the former can never
+  // corrupt already-recorded financial history.
+  const { vendorId } = req.body;
+  let resolvedVendor = null;
+  if (vendorId !== undefined) {
+    const { vendor, error } = await resolveVendorId(vendorId, req.companyIds);
+    if (error) return res.status(error.status).json(error.body);
+    resolvedVendor = vendor;
+  }
+
   // Same completion invariant as createWorkOrder, plus: staying completed
   // across an unrelated edit (no completedAt in this request) preserves the
   // existing timestamp rather than bumping it to now.
@@ -482,17 +512,31 @@ export async function updateWorkOrder(req, res) {
 
   await workOrder.save();
 
+  // Never deletes a WorkOrderVendor row — marks the previously-current one
+  // false instead, so a Vendor's Work History keeps this Work Order even
+  // after someone else is assigned. Reassigning back to a Vendor who had a
+  // (now-historical) row here creates a fresh row rather than reviving the
+  // old one; each assignment period is its own historical record.
+  if (vendorId !== undefined) {
+    await WorkOrderVendor.update({ current: false }, { where: { workOrderId: workOrder.id, current: true } });
+    if (resolvedVendor) {
+      await WorkOrderVendor.create({ workOrderId: workOrder.id, vendorId: resolvedVendor.id, current: true });
+    }
+  }
+
   // Same enriched shape as getWorkOrder — WorkOrderDetail applies whatever
-  // this returns directly to its state, so it needs workType/totalCost
-  // here too or they'd disappear from the page after any edit.
-  const [workType, totalCostResult] = await Promise.all([
+  // this returns directly to its state, so it needs workType/totalCost/
+  // vendors here too or they'd disappear from the page after any edit.
+  const [workType, totalCostResult, vendors] = await Promise.all([
     workOrder.workTypeId ? WorkType.findByPk(workOrder.workTypeId) : null,
     WorkOrderCostEntry.sum("amount", { where: { workOrderId: workOrder.id } }),
+    getVendorsForWorkOrder(workOrder.id),
   ]);
 
   res.json({
     ...workOrder.toJSON(),
     workType,
+    vendors,
     totalCost: totalCostResult != null ? Number(totalCostResult) : 0,
   });
 }

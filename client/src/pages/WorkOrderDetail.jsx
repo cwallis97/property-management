@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import EmptyState from "../components/EmptyState";
 import SectionSpinner from "../components/SectionSpinner";
+import SearchableSelect from "../components/SearchableSelect";
 import { IconAlertTriangle, IconArrowLeft, IconWrench } from "../components/icons";
 import { priorityBadge, statusBadge, statusLabel } from "../components/WorkOrderTable";
 import {
@@ -16,6 +17,7 @@ import {
   getWorkOrder,
   getLocations,
   getAssets,
+  getVendors,
   updateWorkOrder,
   getWorkOrderNotes,
   createWorkOrderNote,
@@ -84,6 +86,53 @@ function fallbackBackTarget(propertyId) {
   return { backLabel: "Work Orders", backTo: `/portfolio/${propertyId}`, backTabState: { tab: "work-orders" } };
 }
 
+// Tracks idle -> saving -> saved (auto-settling back to idle) -> error for
+// exactly one editable control, independently of every other one on the
+// page — so Status and Vendor (and Complete/Reopen, tracked as their own
+// separate instance even though it hits the same status field) can never
+// clobber each other's confirmation. Deliberately a small local hook, not
+// a generic form/field framework — WorkOrderDetail only has a couple of
+// autosaving controls, not a form's worth.
+function useFieldSave() {
+  const [phase, setPhase] = useState("idle"); // idle | saving | saved | error
+  const [error, setError] = useState(null);
+  const timeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
+  async function run(mutate) {
+    if (phase === "saving") return null;
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setPhase("saving");
+    setError(null);
+    try {
+      const result = await mutate();
+      setPhase("saved");
+      timeoutRef.current = setTimeout(() => setPhase("idle"), 2000);
+      return result;
+    } catch (err) {
+      setPhase("error");
+      setError(err.message || "Something went wrong. Please try again.");
+      return null;
+    }
+  }
+
+  // For controls with their own explicit Cancel (Description's edit mode,
+  // unlike Status/Vendor which have no "close" step) — clears a stale error
+  // so reopening the editor never immediately re-shows a past failure.
+  function reset() {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setPhase("idle");
+    setError(null);
+  }
+
+  return { phase, error, run, reset };
+}
+
 export default function WorkOrderDetail() {
   const { propertyId, workOrderId } = useParams();
   const location = useLocation();
@@ -104,9 +153,26 @@ export default function WorkOrderDetail() {
   const [locationsStatus, setLocationsStatus] = useState("loading");
   const [assets, setAssets] = useState([]);
   const [assetsStatus, setAssetsStatus] = useState("loading");
+  const [vendors, setVendors] = useState([]);
+  const [vendorsStatus, setVendorsStatus] = useState("loading");
 
-  const [mutating, setMutating] = useState(false);
-  const [mutationError, setMutationError] = useState(null);
+  // One independent save-state per editable control. `actionSave` is
+  // deliberately separate from `statusSave` even though Complete/Reopen
+  // write the same `status` field — those are explicit lifecycle actions
+  // that already communicate their own in-progress state on the button
+  // itself, and must never show a contextual "Saved" the inline Status
+  // picker didn't actually produce.
+  const statusSave = useFieldSave();
+  const vendorSave = useFieldSave();
+  const actionSave = useFieldSave();
+  const descriptionSave = useFieldSave();
+
+  // Description is the current best summary of the issue/work — editable,
+  // unlike Notes below (append-only chronological history). Renders as
+  // plain read content by default; edit mode is local-only until Save,
+  // exactly like the Cost Entry form's open/closed pattern.
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState("");
 
   const [notes, setNotes] = useState([]);
   const [notesStatus, setNotesStatus] = useState("loading"); // loading | error | ready
@@ -118,6 +184,7 @@ export default function WorkOrderDetail() {
   const [costsStatus, setCostsStatus] = useState("loading"); // loading | error | ready
   const [costFormOpen, setCostFormOpen] = useState(false);
   const [costType, setCostType] = useState("labor");
+  const [costVendorId, setCostVendorId] = useState(null);
   const [costAmount, setCostAmount] = useState("");
   const [costNote, setCostNote] = useState("");
   const [costDate, setCostDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -169,6 +236,18 @@ export default function WorkOrderDetail() {
         setAssetsStatus("error");
       });
 
+    setVendorsStatus("loading");
+    getVendors()
+      .then((data) => {
+        if (cancelled) return;
+        setVendors(data);
+        setVendorsStatus("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setVendorsStatus("error");
+      });
+
     setNotesStatus("loading");
     getWorkOrderNotes(workOrderId)
       .then((data) => {
@@ -199,16 +278,45 @@ export default function WorkOrderDetail() {
   }, [propertyId, workOrderId]);
 
   async function applyStatus(nextStatus) {
-    if (mutating) return;
-    setMutating(true);
-    setMutationError(null);
-    try {
-      const updated = await updateWorkOrder(workOrderId, { status: nextStatus });
+    const updated = await statusSave.run(() => updateWorkOrder(workOrderId, { status: nextStatus }));
+    if (updated) setWorkOrder(updated);
+  }
+
+  // Same immediate-commit pattern as applyStatus: fires only on an actual
+  // selection change, never on mount/render, so an already-inactive
+  // assigned Vendor is never silently re-submitted and rejected.
+  async function applyVendor(nextVendorId) {
+    const updated = await vendorSave.run(() => updateWorkOrder(workOrderId, { vendorId: nextVendorId }));
+    if (updated) setWorkOrder(updated);
+  }
+
+  // Complete/Reopen also change `status`, but are tracked through their own
+  // save-state (actionSave), never statusSave — they're explicit lifecycle
+  // actions with their own "Saving…" button label, not the inline Status
+  // picker, and must never trigger that picker's contextual "Saved".
+  async function applyAction(nextStatus) {
+    const updated = await actionSave.run(() => updateWorkOrder(workOrderId, { status: nextStatus }));
+    if (updated) setWorkOrder(updated);
+  }
+
+  function startEditingDescription() {
+    descriptionSave.reset();
+    setDescriptionDraft(workOrder.description ?? "");
+    setEditingDescription(true);
+  }
+
+  function cancelEditingDescription() {
+    descriptionSave.reset();
+    setEditingDescription(false);
+  }
+
+  async function saveDescription() {
+    const updated = await descriptionSave.run(() =>
+      updateWorkOrder(workOrderId, { description: descriptionDraft.trim() || null })
+    );
+    if (updated) {
       setWorkOrder(updated);
-    } catch (err) {
-      setMutationError(err.message || "Something went wrong. Please try again.");
-    } finally {
-      setMutating(false);
+      setEditingDescription(false);
     }
   }
 
@@ -234,11 +342,13 @@ export default function WorkOrderDetail() {
         amount,
         note: costNote.trim() || undefined,
         costDate,
+        vendorId: costType === "vendor" ? costVendorId ?? undefined : undefined,
       });
       setCosts((prev) => [...prev, created]);
       setWorkOrder((prev) => (prev ? { ...prev, totalCost: prev.totalCost + created.amount } : prev));
       setCostAmount("");
       setCostNote("");
+      setCostVendorId(null);
       setCostDate(new Date().toISOString().slice(0, 10));
       setCostFormOpen(false);
     } catch (err) {
@@ -263,6 +373,26 @@ export default function WorkOrderDetail() {
       setSubmittingNote(false);
     }
   }
+
+  // Active Vendors are always offered; an already-assigned Vendor that has
+  // since gone inactive stays visible too (so its current assignment is
+  // never hidden), it just isn't offered as a NEW choice for anyone else —
+  // mirrors resolveVendorId's server-side "reject inactive for new
+  // assignment, never touch existing references" rule.
+  const assignedVendor = workOrder?.vendors?.[0] ?? null;
+  const vendorOptions = useMemo(() => {
+    const options = [{ value: null, label: "No vendor", sublabel: null }];
+    const seen = new Set();
+    for (const v of vendors) {
+      if (v.status !== "active") continue;
+      options.push({ value: v.id, label: v.name, sublabel: v.category || null });
+      seen.add(v.id);
+    }
+    if (assignedVendor && !seen.has(assignedVendor.id)) {
+      options.push({ value: assignedVendor.id, label: `${assignedVendor.name} (inactive)`, sublabel: null });
+    }
+    return options;
+  }, [vendors, assignedVendor]);
 
   if (workOrderStatus === "loading") return <SectionSpinner />;
 
@@ -362,20 +492,76 @@ export default function WorkOrderDetail() {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <div className="rounded-2xl border border-gray-200 bg-white p-6">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Description</h2>
-            <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed text-gray-700">
-              {workOrder.description || <span className="text-gray-400">No description provided</span>}
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Description</h2>
+              {!editingDescription && (
+                <button
+                  type="button"
+                  onClick={startEditingDescription}
+                  className="text-xs font-medium text-gray-500 transition hover:text-gray-900"
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+
+            {!editingDescription ? (
+              <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed text-gray-700">
+                {workOrder.description || <span className="text-gray-400">No description provided</span>}
+              </p>
+            ) : (
+              <div className="mt-2">
+                <textarea
+                  autoFocus
+                  value={descriptionDraft}
+                  onChange={(e) => setDescriptionDraft(e.target.value)}
+                  placeholder="Describe the issue or work..."
+                  rows={4}
+                  className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    {descriptionSave.phase === "saving" && <span className="text-xs text-gray-400">Saving…</span>}
+                    {descriptionSave.phase === "saved" && (
+                      <span className="text-xs font-medium text-emerald-600">Saved</span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={descriptionSave.phase === "saving"}
+                      onClick={cancelEditingDescription}
+                      className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-500 transition hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={descriptionSave.phase === "saving"}
+                      onClick={saveDescription}
+                      className="rounded-lg bg-gray-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {descriptionSave.phase === "saving" ? "Saving…" : "Save"}
+                    </button>
+                  </div>
+                </div>
+                {descriptionSave.phase === "error" && (
+                  <p className="mt-1.5 text-xs text-red-600">{descriptionSave.error}</p>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* UPDATES — what's been learned/done since the description was
-              filed. Deliberately not called "Activity", since Notes are the
-              only entry type this supports today; calling it Activity would
-              imply status changes/photos/etc. are already tracked here.
-              Kept as a plain flowing list (no outer card) rather than
-              boxing it like Description — visually reinforces that
-              Description is the fixed original report, while Updates is
-              the living, ongoing story. */}
+          {/* UPDATES — append-only chronological findings, communication, and
+              work performed, distinct from Description (the editable
+              current best summary of the issue/work) above. Deliberately
+              not called "Activity", since Notes are the only entry type
+              this supports today; calling it Activity would imply status
+              changes/photos/etc. are already tracked here. Kept as a plain
+              flowing list (no outer card) rather than boxing it like
+              Description — visually reinforces that Updates is a running
+              history you add to, never edit, while Description is a single
+              current snapshot you keep up to date. */}
           <div>
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Updates</h2>
 
@@ -444,6 +630,7 @@ export default function WorkOrderDetail() {
                       {entry.note && <p className="text-xs text-gray-500">{entry.note}</p>}
                       <p className="text-xs text-gray-400">
                         {formatDueDate(entry.costDate)} · {entry.createdBy?.name ?? "Unknown"}
+                        {entry.vendor && ` · ${entry.vendor.name}`}
                       </p>
                     </div>
                     <span className="shrink-0 text-sm font-medium text-gray-900">{formatMoney(entry.amount)}</span>
@@ -471,7 +658,16 @@ export default function WorkOrderDetail() {
                     <button
                       key={t.value}
                       type="button"
-                      onClick={() => setCostType(t.value)}
+                      onClick={() => {
+                        setCostType(t.value);
+                        // A nice default, not a rule: picking "Vendor" the
+                        // first time offers the Work Order's already-
+                        // assigned Vendor, since that's who most likely
+                        // received this money — freely overridable below.
+                        if (t.value === "vendor" && !costVendorId && assignedVendor) {
+                          setCostVendorId(assignedVendor.id);
+                        }
+                      }}
                       className={`rounded-lg px-2.5 py-1.5 text-sm font-medium transition ${
                         costType === t.value ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-100"
                       }`}
@@ -480,6 +676,17 @@ export default function WorkOrderDetail() {
                     </button>
                   ))}
                 </div>
+
+                {costType === "vendor" && (
+                  <div className="mt-3">
+                    <SearchableSelect
+                      value={costVendorId}
+                      onChange={setCostVendorId}
+                      options={vendorOptions}
+                      placeholder="Which vendor received this? (optional)"
+                    />
+                  </div>
+                )}
                 <div className="mt-3 flex gap-2">
                   <input
                     type="number"
@@ -532,30 +739,33 @@ export default function WorkOrderDetail() {
         </div>
 
         <div className="space-y-6">
-          {mutationError && <p className="text-sm text-red-600">{mutationError}</p>}
-
           <SidebarSection title="Status">
             {!isCompleted ? (
-              <div className="inline-flex flex-wrap rounded-lg border border-gray-200 bg-gray-50 p-1">
-                {ACTIVE_WORK_ORDER_STATUSES.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    disabled={mutating}
-                    onClick={() => applyStatus(s)}
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                      workOrder.status === s ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                    }`}
-                  >
-                    {statusLabel[s]}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex flex-wrap rounded-lg border border-gray-200 bg-gray-50 p-1">
+                  {ACTIVE_WORK_ORDER_STATUSES.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={statusSave.phase === "saving" || actionSave.phase === "saving"}
+                      onClick={() => applyStatus(s)}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        workOrder.status === s ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      {statusLabel[s]}
+                    </button>
+                  ))}
+                </div>
+                {statusSave.phase === "saving" && <span className="text-xs text-gray-400">Saving…</span>}
+                {statusSave.phase === "saved" && <span className="text-xs font-medium text-emerald-600">Saved</span>}
               </div>
             ) : (
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-inset ring-emerald-100">
                 Completed
               </span>
             )}
+            {statusSave.phase === "error" && <p className="mt-1.5 text-xs text-red-600">{statusSave.error}</p>}
           </SidebarSection>
 
           <SidebarSection title="Location">
@@ -585,6 +795,37 @@ export default function WorkOrderDetail() {
             )}
           </SidebarSection>
 
+          <SidebarSection title="Vendor">
+            <SearchableSelect
+              value={assignedVendor?.id ?? null}
+              onChange={applyVendor}
+              options={vendorOptions}
+              placeholder="No vendor assigned"
+              disabled={vendorSave.phase === "saving"}
+            />
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {vendorSave.phase === "saving" && <span className="text-xs text-gray-400">Saving…</span>}
+              {vendorSave.phase === "saved" && <span className="text-xs font-medium text-emerald-600">Saved</span>}
+              {assignedVendor && (
+                <Link
+                  to={`/vendors/${assignedVendor.id}`}
+                  // Same nested-return-to-origin trick as the Asset link
+                  // above — Vendor Detail's own Back returns here with this
+                  // page's real original origin intact.
+                  state={{
+                    backLabel: "Work Order",
+                    backTo: `/portfolio/${propertyId}/work-orders/${workOrderId}`,
+                    backTabState: { backLabel, backTo, backTabState },
+                  }}
+                  className="text-xs font-medium text-blue-600 hover:underline"
+                >
+                  View Vendor →
+                </Link>
+              )}
+            </div>
+            {vendorSave.phase === "error" && <p className="mt-1.5 text-xs text-red-600">{vendorSave.error}</p>}
+          </SidebarSection>
+
           {(workOrder.category || workOrder.workType) && (
             <SidebarSection title="Category">
               <p className="text-sm text-gray-900">{categoryLabel[workOrder.category] || workOrder.category}</p>
@@ -604,25 +845,26 @@ export default function WorkOrderDetail() {
             {!isCompleted ? (
               <button
                 type="button"
-                disabled={mutating}
-                onClick={() => applyStatus("completed")}
+                disabled={actionSave.phase === "saving" || statusSave.phase === "saving"}
+                onClick={() => applyAction("completed")}
                 className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {mutating ? "Saving…" : "Complete Work Order"}
+                {actionSave.phase === "saving" ? "Saving…" : "Complete Work Order"}
               </button>
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-gray-500">Resolved in {resolutionAge}</p>
                 <button
                   type="button"
-                  disabled={mutating}
-                  onClick={() => applyStatus("open")}
+                  disabled={actionSave.phase === "saving" || statusSave.phase === "saving"}
+                  onClick={() => applyAction("open")}
                   className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {mutating ? "Saving…" : "Reopen"}
+                  {actionSave.phase === "saving" ? "Saving…" : "Reopen"}
                 </button>
               </div>
             )}
+            {actionSave.phase === "error" && <p className="mt-1.5 text-xs text-red-600">{actionSave.error}</p>}
           </SidebarSection>
         </div>
       </div>

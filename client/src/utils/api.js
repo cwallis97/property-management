@@ -179,6 +179,31 @@ export function getWorkTypes() {
   return apiFetch("/api/work-types");
 }
 
+// Company-scoped — every Vendor (active and inactive) the caller's company
+// owns. Active/Inactive filtering happens client-side over this one fetch,
+// same convention as Assets/Work Orders.
+export function getVendors() {
+  return apiFetch("/api/vendors");
+}
+
+export function getVendor(id) {
+  return apiFetch(`/api/vendors/${id}`);
+}
+
+export function createVendor(payload) {
+  return apiFetch("/api/vendors", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateVendor(id, payload) {
+  return apiFetch(`/api/vendors/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getWorkOrderCosts(workOrderId) {
   return apiFetch(`/api/work-orders/${workOrderId}/costs`);
 }

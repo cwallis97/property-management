@@ -17,6 +17,8 @@ import { initWorkOrderNoteModel, WorkOrderNote } from "./WorkOrderNote.js";
 import { initSitePlanModel, SitePlan, SITE_PLAN_ALLOWED_MIME_TYPES } from "./SitePlan.js";
 import { initWorkTypeModel, WorkType, WORK_ORDER_CATEGORIES } from "./WorkType.js";
 import { initWorkOrderCostEntryModel, WorkOrderCostEntry, WORK_ORDER_COST_TYPES } from "./WorkOrderCostEntry.js";
+import { initVendorModel, Vendor, VENDOR_STATUSES } from "./Vendor.js";
+import { initWorkOrderVendorModel, WorkOrderVendor } from "./WorkOrderVendor.js";
 
 initUserModel(sequelize);
 initCompanyModel(sequelize);
@@ -31,6 +33,8 @@ initWorkOrderNoteModel(sequelize);
 initSitePlanModel(sequelize);
 initWorkTypeModel(sequelize);
 initWorkOrderCostEntryModel(sequelize);
+initVendorModel(sequelize);
+initWorkOrderVendorModel(sequelize);
 
 User.belongsToMany(Company, { through: Membership, foreignKey: "userId", otherKey: "companyId", as: "companies" });
 Company.belongsToMany(User, { through: Membership, foreignKey: "companyId", otherKey: "userId", as: "users" });
@@ -102,6 +106,35 @@ WorkOrderCostEntry.belongsTo(WorkOrder, { foreignKey: "workOrderId", as: "workOr
 User.hasMany(WorkOrderCostEntry, { foreignKey: "createdByUserId", as: "workOrderCostEntries" });
 WorkOrderCostEntry.belongsTo(User, { foreignKey: "createdByUserId", as: "createdBy" });
 
+// Vendor is Company-scoped directly (no Property owner — a Vendor can work
+// across every Property a company has), the same shape as WorkType's
+// company_id but required, since there is no "global" Vendor.
+Company.hasMany(Vendor, { foreignKey: "companyId", as: "vendors", onDelete: "CASCADE" });
+Vendor.belongsTo(Company, { foreignKey: "companyId", as: "company" });
+
+// WorkOrderVendor is a real join table (see its migration for why this
+// isn't a scalar vendor_id on WorkOrder). Both the through-association
+// (for eager-loading "this Work Order's Vendors" / "this Vendor's Work
+// Orders" directly) and the raw hasMany/belongsTo on the join rows
+// themselves (for the controller's replace-on-update logic) are exposed —
+// same dual pattern Company/User already use for Membership.
+WorkOrder.belongsToMany(Vendor, { through: WorkOrderVendor, foreignKey: "workOrderId", otherKey: "vendorId", as: "vendors" });
+Vendor.belongsToMany(WorkOrder, { through: WorkOrderVendor, foreignKey: "vendorId", otherKey: "workOrderId", as: "workOrders" });
+
+WorkOrder.hasMany(WorkOrderVendor, { foreignKey: "workOrderId", as: "vendorLinks", onDelete: "RESTRICT" });
+WorkOrderVendor.belongsTo(WorkOrder, { foreignKey: "workOrderId", as: "workOrder" });
+
+Vendor.hasMany(WorkOrderVendor, { foreignKey: "vendorId", as: "workOrderLinks", onDelete: "RESTRICT" });
+WorkOrderVendor.belongsTo(Vendor, { foreignKey: "vendorId", as: "vendor" });
+
+// Deliberately separate from WorkOrderVendor above — this is financial
+// attribution ("which dollars actually went to this Vendor"), not
+// participation ("did this Vendor work on this job"). See
+// WorkOrderCostEntry.js for the full reasoning. RESTRICT: a cost entry's
+// real financial history is never silently orphaned by a Vendor change.
+Vendor.hasMany(WorkOrderCostEntry, { foreignKey: "vendorId", as: "costEntries", onDelete: "RESTRICT" });
+WorkOrderCostEntry.belongsTo(Vendor, { foreignKey: "vendorId", as: "vendor" });
+
 export {
   sequelize,
   User,
@@ -120,6 +153,9 @@ export {
   WORK_ORDER_CATEGORIES,
   WorkOrderCostEntry,
   WORK_ORDER_COST_TYPES,
+  Vendor,
+  VENDOR_STATUSES,
+  WorkOrderVendor,
   PIN_TYPES,
   SEVERITY_LEVELS,
   REPAIR_STATUSES,

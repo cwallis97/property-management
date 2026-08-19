@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
-import { WorkOrder, WorkOrderCostEntry, Property, User, WORK_ORDER_COST_TYPES } from "../models/index.js";
+import { WorkOrder, WorkOrderCostEntry, Property, User, Vendor, WORK_ORDER_COST_TYPES } from "../models/index.js";
+import { resolveVendorId } from "./vendorController.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -37,6 +38,7 @@ async function findOwnedWorkOrder(workOrderId, companyIds) {
 
 function serializeCostEntry(entry) {
   const createdBy = entry.createdBy;
+  const vendor = entry.vendor;
   return {
     id: entry.id,
     type: entry.type,
@@ -49,6 +51,10 @@ function serializeCostEntry(entry) {
     costDate: entry.costDate,
     createdAt: entry.createdAt,
     createdBy: createdBy ? { id: createdBy.id, name: createdBy.displayName || createdBy.email } : null,
+    // Independent of `type` — see WorkOrderCostEntry.js. Which Vendor (if
+    // any) actually received this specific dollar amount, never inferred
+    // from the Work Order's own Vendor assignment.
+    vendor: vendor ? { id: vendor.id, name: vendor.name } : null,
   };
 }
 
@@ -62,7 +68,10 @@ export async function listWorkOrderCosts(req, res) {
 
   const entries = await WorkOrderCostEntry.findAll({
     where: { workOrderId: workOrder.id },
-    include: { model: User, as: "createdBy", attributes: ["id", "displayName", "email"] },
+    include: [
+      { model: User, as: "createdBy", attributes: ["id", "displayName", "email"] },
+      { model: Vendor, as: "vendor", attributes: ["id", "name"] },
+    ],
     order: [["createdAt", "ASC"]],
   });
 
@@ -91,6 +100,16 @@ export async function createWorkOrderCost(req, res) {
     return res.status(400).json({ error: "costDate must be a valid date in YYYY-MM-DD format." });
   }
 
+  // Independent of `type` — a cost entry may name the Vendor who actually
+  // received this money regardless of how it's classified. Optional: most
+  // cost entries (internal labor, property-purchased materials) have no
+  // Vendor at all. Same resolveVendorId validation as Work-Order-level
+  // assignment, so an inactive/foreign Vendor can never be attributed here
+  // either.
+  const { vendorId } = req.body;
+  const { vendor, error: vendorError } = await resolveVendorId(vendorId, req.companyIds);
+  if (vendorError) return res.status(vendorError.status).json(vendorError.body);
+
   // Author identity always comes from the authenticated session — never
   // from client input. Costs are intentionally allowed on a Work Order in
   // any status, including completed — completion and financial
@@ -104,10 +123,14 @@ export async function createWorkOrderCost(req, res) {
     amount,
     note: note || null,
     costDate: costDate || todayDateOnly(),
+    vendorId: vendor ? vendor.id : null,
   });
 
   const entryWithAuthor = await WorkOrderCostEntry.findByPk(entry.id, {
-    include: { model: User, as: "createdBy", attributes: ["id", "displayName", "email"] },
+    include: [
+      { model: User, as: "createdBy", attributes: ["id", "displayName", "email"] },
+      { model: Vendor, as: "vendor", attributes: ["id", "name"] },
+    ],
   });
 
   res.status(201).json(serializeCostEntry(entryWithAuthor));

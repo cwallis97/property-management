@@ -25,6 +25,12 @@ export function initWorkOrderCostEntryModel(sequelize) {
       // the column Reports filters by, never createdAt.
       costDate: { type: DataTypes.DATEONLY, allowNull: false, field: "cost_date" },
       createdByUserId: { type: DataTypes.UUID, allowNull: true, field: "created_by_user_id" },
+      // Independent of `type` — `type: "vendor"` still just means "external/
+      // contracted expense"; this answers a narrower, separate question:
+      // which specific Vendor actually received this dollar amount. Never
+      // inferred from a Work Order's assigned Vendor — see workOrderVendor
+      // vs this field in models/index.js for the full distinction.
+      vendorId: { type: DataTypes.UUID, allowNull: true, field: "vendor_id" },
     },
     {
       sequelize,
