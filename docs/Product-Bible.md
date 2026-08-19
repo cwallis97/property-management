@@ -88,10 +88,10 @@ The sections above describe the connected model PropertyOS is built toward. This
 - **Work Type** — a normalized, stable-identity reference table (not free text). Global/shared taxonomy today, with a reserved column for future company-specific types.
 - **Cost Entries** — itemized, each carrying its own `costDate`; a Work Order's cost is always derived by summing its entries, never stored separately.
 - **Reports V1 (Maintenance Spend)** — company-scoped SQL aggregation, Category → Work Type → Work Order drill-down, date-range and property filters, values that reconcile exactly at every level.
+- **Reports → Map** ("View on Map") — at the Work Order drill level, with a single property selected, view that report's matching Work Orders spatially on the property's Site Plan. Reuses the same Work Order records, `mapX`/`mapY`, and `spendInPeriod` already used elsewhere; unmapped Work Orders remain fully counted in every report total.
 
 **Roadmap — real parts of the intended graph, not yet built. Do not treat these as implemented:**
 
-- **Reports → Map** ("View on Map" — viewing a report's matching Work Orders spatially on the Site Plan). Architecture reviewed (Milestone 8C); no code exists yet.
 - **Point / line / polygon geometry.** The Site Plan today supports only point positions (a Work Order's `mapX`/`mapY`). Lines (water/sewer/electrical runs) and polygons (parcels, zones) don't exist.
 - **Infrastructure layers** — toggleable Water/Sewer/Electrical/Roads/etc. overlays.
 - **Infrastructure service relationships** — e.g. which lots a given valve or line actually serves.
