@@ -23,13 +23,34 @@ const TABS = [
 ];
 
 // One divided stat cell inside a single shared strip — same visual pattern
-// as the Dashboard's Portfolio Pulse strip, scoped to this property.
-function OverviewStat({ label, value, accent }) {
-  return (
-    <div className="px-4 py-3.5 sm:px-5">
+// as the Dashboard's Portfolio Pulse strip, scoped to this property. When a
+// metric represents a specific subset of real records (Active Work Orders,
+// Critical Assets, ...) and there's actually something behind it, the cell
+// itself becomes the navigation target — no separate button, no added
+// visual weight, just a restrained hover/focus treatment on the existing
+// cell. A zero-value metric never becomes clickable, so it never implies
+// there's something to go look at.
+function OverviewStat({ label, value, accent, onClick }) {
+  const isActionable = typeof onClick === "function" && Number(value) > 0;
+  const content = (
+    <>
       <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
       <p className={`mt-1 text-xl font-semibold ${accent ? "text-red-600" : "text-gray-900"}`}>{value}</p>
-    </div>
+    </>
+  );
+
+  if (!isActionable) {
+    return <div className="px-4 py-3.5 sm:px-5">{content}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="block w-full cursor-pointer px-4 py-3.5 text-left transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-300 sm:px-5"
+    >
+      {content}
+    </button>
   );
 }
 
@@ -46,6 +67,21 @@ export default function PropertyDetail() {
   // Order from the Completed view and clicking back should land back on
   // Completed, not silently reset to the Active default.
   const [workOrdersView, setWorkOrdersView] = useState(location.state?.workOrdersView ?? "active");
+  // Additive on top of the Active/Completed/All view above, not a fourth
+  // view value — Needs Attention/Overdue aren't a "view" of the queue the
+  // way Active/Completed/All are (see WorkOrderViewFilter/
+  // filterWorkOrdersByView, also shared by Portfolio Work Orders), they're
+  // Overview's alert metrics narrowing into it. Restored on return from a
+  // Work Order the same way workOrdersView already is.
+  const [workOrdersAttentionFilter, setWorkOrdersAttentionFilter] = useState(
+    location.state?.workOrdersAttentionFilter ?? null
+  );
+  // Seeds AssetTable's own search box (which already filters by status text,
+  // including "critical" and "needs-attention" verbatim) when arriving from
+  // an Overview metric. AssetTable fully remounts every time this tab
+  // becomes active (see the conditional render below), so this only needs
+  // to hold the value at the moment of navigation, not stay in sync after.
+  const [assetsInitialQuery, setAssetsInitialQuery] = useState("");
 
   // Tab switching is local state, not a route change, so AppShell's
   // scrollable <main> keeps whatever scroll position the previous tab left
@@ -239,12 +275,32 @@ export default function PropertyDetail() {
   const urgentCount = workOrderRows.filter((row) => row.priority === "urgent" && row.status !== "completed").length;
   const overdueCount = workOrderRows.filter((row) => row.overdue).length;
 
-  // What the table actually renders — filtered separately from the summary
-  // counts above, using the one shared Active/Completed/All definition.
-  const visibleWorkOrderRows = useMemo(
-    () => filterWorkOrdersByView(workOrderRows, workOrdersView),
-    [workOrderRows, workOrdersView]
+  // Same needsAttention/isOverdue calls the summary counts above and
+  // Overview's stats already use — id sets, not a re-derivation of either
+  // rule, so this can never disagree with what "Needs Attention"/"Overdue"
+  // mean anywhere else in the app.
+  const attentionWorkOrderIds = useMemo(
+    () => new Set(workOrders.filter(needsAttention).map((wo) => wo.id)),
+    [workOrders]
   );
+  const overdueWorkOrderIds = useMemo(
+    () => new Set(workOrders.filter(isOverdue).map((wo) => wo.id)),
+    [workOrders]
+  );
+
+  // What the table actually renders — filtered separately from the summary
+  // counts above, using the one shared Active/Completed/All definition, then
+  // optionally narrowed further by an Overview metric's attention filter.
+  const visibleWorkOrderRows = useMemo(() => {
+    const viewFiltered = filterWorkOrdersByView(workOrderRows, workOrdersView);
+    if (workOrdersAttentionFilter === "needsAttention") {
+      return viewFiltered.filter((row) => attentionWorkOrderIds.has(row.id));
+    }
+    if (workOrdersAttentionFilter === "overdue") {
+      return viewFiltered.filter((row) => overdueWorkOrderIds.has(row.id));
+    }
+    return viewFiltered;
+  }, [workOrderRows, workOrdersView, workOrdersAttentionFilter, attentionWorkOrderIds, overdueWorkOrderIds]);
 
   // Overview command-center numbers — all derived from the same four
   // requests this page already made, using the exact same needsAttention/
@@ -320,7 +376,13 @@ export default function PropertyDetail() {
           <button
             key={tab.key}
             type="button"
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => {
+              setActiveTab(tab.key);
+              // A plain tab click is always the tab's normal default state —
+              // only an Overview metric click should arrive pre-filtered.
+              if (tab.key === "assets") setAssetsInitialQuery("");
+              if (tab.key === "work-orders") setWorkOrdersAttentionFilter(null);
+            }}
             className={`border-b-2 pb-3 text-sm font-medium transition ${
               activeTab === tab.key
                 ? "border-gray-900 text-gray-900"
@@ -336,11 +398,52 @@ export default function PropertyDetail() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white sm:grid-cols-3 sm:divide-y-0">
-              <OverviewStat label="Active Work Orders" value={overview.activeCount} />
-              <OverviewStat label="Needs Attention" value={overview.attentionCount} accent={overview.attentionCount > 0} />
-              <OverviewStat label="Overdue" value={overview.overdueCount} accent={overview.overdueCount > 0} />
-              <OverviewStat label="Critical Assets" value={overview.criticalAssetCount} accent={overview.criticalAssetCount > 0} />
-              <OverviewStat label="Assets Needing Attention" value={overview.attentionAssetCount} />
+              <OverviewStat
+                label="Active Work Orders"
+                value={overview.activeCount}
+                onClick={() => {
+                  setWorkOrdersView("active");
+                  setWorkOrdersAttentionFilter(null);
+                  setActiveTab("work-orders");
+                }}
+              />
+              <OverviewStat
+                label="Needs Attention"
+                value={overview.attentionCount}
+                accent={overview.attentionCount > 0}
+                onClick={() => {
+                  setWorkOrdersView("active");
+                  setWorkOrdersAttentionFilter("needsAttention");
+                  setActiveTab("work-orders");
+                }}
+              />
+              <OverviewStat
+                label="Overdue"
+                value={overview.overdueCount}
+                accent={overview.overdueCount > 0}
+                onClick={() => {
+                  setWorkOrdersView("active");
+                  setWorkOrdersAttentionFilter("overdue");
+                  setActiveTab("work-orders");
+                }}
+              />
+              <OverviewStat
+                label="Critical Assets"
+                value={overview.criticalAssetCount}
+                accent={overview.criticalAssetCount > 0}
+                onClick={() => {
+                  setAssetsInitialQuery("critical");
+                  setActiveTab("assets");
+                }}
+              />
+              <OverviewStat
+                label="Assets Needing Attention"
+                value={overview.attentionAssetCount}
+                onClick={() => {
+                  setAssetsInitialQuery("needs-attention");
+                  setActiveTab("assets");
+                }}
+              />
               <OverviewStat label="Locations" value={locations.length} />
             </div>
 
@@ -502,7 +605,9 @@ export default function PropertyDetail() {
             />
           )}
 
-          {assetsStatus === "ready" && assets.length > 0 && <AssetTable rows={assetRows} />}
+          {assetsStatus === "ready" && assets.length > 0 && (
+            <AssetTable rows={assetRows} initialQuery={assetsInitialQuery} />
+          )}
         </div>
       )}
 
@@ -521,7 +626,19 @@ export default function PropertyDetail() {
           {workOrdersStatus === "ready" && (
             <>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <WorkOrderViewFilter value={workOrdersView} onChange={setWorkOrdersView} />
+                <div className="flex flex-wrap items-center gap-2">
+                  <WorkOrderViewFilter value={workOrdersView} onChange={setWorkOrdersView} />
+                  {workOrdersAttentionFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setWorkOrdersAttentionFilter(null)}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-gray-800"
+                    >
+                      {workOrdersAttentionFilter === "overdue" ? "Overdue" : "Needs Attention"}
+                      <span aria-hidden="true">✕</span>
+                    </button>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(true)}
@@ -553,9 +670,19 @@ export default function PropertyDetail() {
                   {visibleWorkOrderRows.length === 0 ? (
                     <EmptyState
                       icon={IconWrench}
-                      title={workOrdersView === "completed" ? "No completed work orders yet" : "Nothing active right now"}
+                      title={
+                        workOrdersAttentionFilter
+                          ? workOrdersAttentionFilter === "overdue"
+                            ? "Nothing overdue right now"
+                            : "Nothing needs attention right now"
+                          : workOrdersView === "completed"
+                          ? "No completed work orders yet"
+                          : "Nothing active right now"
+                      }
                       description={
-                        workOrdersView === "completed"
+                        workOrdersAttentionFilter
+                          ? "Clear the filter above to see the rest of this view."
+                          : workOrdersView === "completed"
                           ? "Work orders will show up here once they're marked complete."
                           : "Every work order here is completed. Check Completed or All to see them."
                       }
@@ -568,7 +695,7 @@ export default function PropertyDetail() {
                           state: {
                             backLabel: "Work Orders",
                             backTo: `/portfolio/${propertyId}`,
-                            backTabState: { tab: "work-orders", workOrdersView },
+                            backTabState: { tab: "work-orders", workOrdersView, workOrdersAttentionFilter },
                           },
                         })
                       }

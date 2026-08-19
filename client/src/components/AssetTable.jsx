@@ -15,8 +15,13 @@ const statusBadge = {
   operational: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100",
 };
 
-export default function AssetTable({ rows }) {
-  const [query, setQuery] = useState("");
+// initialQuery seeds the search box below on mount — used when arriving
+// here from an Overview metric (e.g. "Critical Assets" seeds "critical",
+// which the existing status-text search already matches exactly). This
+// component fully remounts whenever its parent tab becomes active again, so
+// seeding on mount is sufficient; nothing needs to keep it in sync after.
+export default function AssetTable({ rows, initialQuery = "" }) {
+  const [query, setQuery] = useState(initialQuery);
   const [sort, setSort] = useState({ key: "name", direction: "asc" });
 
   const filtered = useMemo(() => {
