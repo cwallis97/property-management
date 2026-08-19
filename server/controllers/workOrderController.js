@@ -245,6 +245,45 @@ export async function listWorkOrdersForProperty(req, res) {
   res.json(workOrders);
 }
 
+// Portfolio-wide operational queue: every non-archived Work Order across
+// every Property the caller's company(ies) own, regardless of status or
+// whether it has any cost entries — this is "what needs attention", not a
+// financial report, so it must never inner-join on cost entries the way
+// Reports' maintenance-spend endpoint does. Mirrors dashboardController's
+// proven shape (resolve owned Property ids first, then one flat
+// WorkOrder.findAll scoped to those ids — never one query per Property).
+// Property/Location/Asset names are eager-loaded for display convenience
+// only; the propertyIds pre-filter above is the actual tenant boundary, not
+// these includes. Active/Completed/All filtering, sorting, and attention
+// logic all stay a frontend concern, exactly like a single property's list.
+export async function listWorkOrdersForCompany(req, res) {
+  const properties = await Property.findAll({
+    where: { companyId: { [Op.in]: req.companyIds } },
+    attributes: ["id"],
+  });
+
+  if (properties.length === 0) return res.json([]);
+
+  const propertyIds = properties.map((p) => p.id);
+
+  const workOrders = await WorkOrder.findAll({
+    where: { propertyId: { [Op.in]: propertyIds }, archivedAt: null },
+    include: [
+      { model: Property, as: "property", attributes: ["id", "name"] },
+      { model: Location, as: "location", attributes: ["id", "name"] },
+      {
+        model: Asset,
+        as: "asset",
+        attributes: ["id", "name", "locationId"],
+        include: [{ model: Location, as: "location", attributes: ["id", "name"] }],
+      },
+    ],
+    order: [["createdAt", "ASC"]],
+  });
+
+  res.json(workOrders);
+}
+
 export async function createWorkOrder(req, res) {
   if (!isValidUUID(req.params.propertyId)) {
     return res.status(400).json({ error: "Invalid property id." });

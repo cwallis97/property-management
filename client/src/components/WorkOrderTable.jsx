@@ -27,14 +27,20 @@ export const statusLabel = {
   completed: "Completed",
 };
 
-export default function WorkOrderTable({ rows, onRowClick }) {
+// showPropertyContext folds the Property (and its Where label) into a
+// subtitle under the Work Order title, in place of the standalone "Where"
+// column — used by the portfolio-wide queue, where every row already needs
+// to make its property obvious. Property-level Work Orders (the default)
+// render exactly as before: property context is already implicit there, so
+// adding it would only add visual weight with no new information.
+export default function WorkOrderTable({ rows, onRowClick, showPropertyContext = false }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
       <table className="w-full text-left text-sm">
         <thead>
           <tr className="border-b border-gray-100 text-xs font-medium uppercase tracking-wide text-gray-400">
             <th className="px-5 py-3">Work Order</th>
-            <th className="px-5 py-3">Where</th>
+            {!showPropertyContext && <th className="px-5 py-3">Where</th>}
             <th className="px-5 py-3">Priority</th>
             <th className="px-5 py-3">Status</th>
             <th className="px-5 py-3">Age</th>
@@ -47,11 +53,22 @@ export default function WorkOrderTable({ rows, onRowClick }) {
               onClick={() => onRowClick?.(row.id)}
               className="cursor-pointer border-b border-gray-50 transition hover:bg-gray-50 last:border-0"
             >
-              <td className="px-5 py-3 font-medium text-gray-900">{row.title}</td>
-              <td className="px-5 py-3">
-                <p className="text-gray-700">{row.wherePrimary}</p>
-                {row.whereSecondary && <p className="text-xs text-gray-400">{row.whereSecondary}</p>}
+              <td className="px-5 py-3 font-medium text-gray-900">
+                {row.title}
+                {showPropertyContext && (
+                  <p className="mt-0.5 truncate text-xs font-normal text-gray-400">
+                    {row.propertyName}
+                    {row.wherePrimary && row.wherePrimary !== "Property-level" && ` · ${row.wherePrimary}`}
+                    {row.whereSecondary && ` · ${row.whereSecondary}`}
+                  </p>
+                )}
               </td>
+              {!showPropertyContext && (
+                <td className="px-5 py-3">
+                  <p className="text-gray-700">{row.wherePrimary}</p>
+                  {row.whereSecondary && <p className="text-xs text-gray-400">{row.whereSecondary}</p>}
+                </td>
+              )}
               <td className="px-5 py-3">
                 <span
                   className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${

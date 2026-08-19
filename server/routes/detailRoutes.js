@@ -4,7 +4,7 @@ import { getPin, updatePin, deletePin } from "../controllers/pinController.js";
 import { getRepair, updateRepair, deleteRepair } from "../controllers/repairController.js";
 import { getLocation, updateLocation, archiveLocation } from "../controllers/locationController.js";
 import { getAsset, updateAsset, archiveAsset } from "../controllers/assetController.js";
-import { getWorkOrder, updateWorkOrder, archiveWorkOrder } from "../controllers/workOrderController.js";
+import { getWorkOrder, updateWorkOrder, archiveWorkOrder, listWorkOrdersForCompany } from "../controllers/workOrderController.js";
 
 const pinRouter = Router();
 pinRouter.use(requireAuth);
@@ -32,6 +32,7 @@ assetRouter.delete("/:id", archiveAsset);
 
 const workOrderRouter = Router();
 workOrderRouter.use(requireAuth);
+workOrderRouter.get("/", listWorkOrdersForCompany);
 workOrderRouter.get("/:id", getWorkOrder);
 workOrderRouter.put("/:id", updateWorkOrder);
 workOrderRouter.delete("/:id", archiveWorkOrder);

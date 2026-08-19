@@ -105,6 +105,14 @@ export function getWorkOrder(id) {
   return apiFetch(`/api/work-orders/${id}`);
 }
 
+// Portfolio-wide operational queue — every Work Order across every Property
+// the caller's company owns. Active/Completed/All and Property filtering
+// both happen client-side over this one fetch, same convention as a single
+// property's Work Orders tab.
+export function getPortfolioWorkOrders() {
+  return apiFetch("/api/work-orders");
+}
+
 export function createWorkOrder(propertyId, payload) {
   return apiFetch(`/api/properties/${propertyId}/work-orders`, {
     method: "POST",
