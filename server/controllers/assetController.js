@@ -1,5 +1,5 @@
 import { Op } from "sequelize";
-import { Asset, Location, Property, ASSET_STATUSES } from "../models/index.js";
+import { sequelize, Asset, Location, Property, WorkOrder, WorkType, WorkOrderCostEntry, ASSET_STATUSES } from "../models/index.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -82,6 +82,33 @@ async function resolveLocationId(locationId, property, companyIds) {
   return { locationId: location.id };
 }
 
+// Portfolio-wide read, mirroring listWorkOrdersForCompany's exact shape:
+// resolve the caller's owned Property ids first, then one flat Asset query
+// scoped to those ids — never one query per Property. Property/Location
+// names are eager-loaded for display only; the propertyIds pre-filter is
+// the real tenant boundary.
+export async function listAssetsForCompany(req, res) {
+  const properties = await Property.findAll({
+    where: { companyId: { [Op.in]: req.companyIds } },
+    attributes: ["id"],
+  });
+
+  if (properties.length === 0) return res.json([]);
+
+  const propertyIds = properties.map((p) => p.id);
+
+  const assets = await Asset.findAll({
+    where: { propertyId: { [Op.in]: propertyIds }, archivedAt: null },
+    include: [
+      { model: Property, as: "property", attributes: ["id", "name"] },
+      { model: Location, as: "location", attributes: ["id", "name"] },
+    ],
+    order: [["createdAt", "ASC"]],
+  });
+
+  res.json(assets);
+}
+
 export async function listAssetsForProperty(req, res) {
   if (!isValidUUID(req.params.propertyId)) {
     return res.status(400).json({ error: "Invalid property id." });
@@ -138,6 +165,13 @@ export async function createAsset(req, res) {
   res.status(201).json(asset);
 }
 
+// Enriched the same way getWorkOrder is: the bare Asset plus everything
+// Asset Detail needs to tell the operational story, computed fresh from the
+// real Work Order / Cost Entry records every time — never a second,
+// separately-tracked history or financial total. Uses the Asset.hasMany
+// (WorkOrder) relationship and WorkOrder -> WorkOrderCostEntry, both of
+// which already existed and were simply unused by any controller before
+// this.
 export async function getAsset(req, res) {
   if (!isValidUUID(req.params.id)) {
     return res.status(400).json({ error: "Invalid asset id." });
@@ -146,7 +180,48 @@ export async function getAsset(req, res) {
   const asset = await findOwnedAsset(req.params.id, req.companyIds);
   if (!asset) return res.status(404).json({ error: "Asset not found." });
 
-  res.json(asset);
+  const [property, location, workOrders] = await Promise.all([
+    Property.findByPk(asset.propertyId, { attributes: ["id", "name"] }),
+    asset.locationId ? Location.findByPk(asset.locationId, { attributes: ["id", "name"] }) : null,
+    WorkOrder.findAll({
+      where: { assetId: asset.id, archivedAt: null },
+      attributes: ["id", "title", "status", "priority", "dueDate", "completedAt", "createdAt", "category", "locationId"],
+      include: [{ model: WorkType, as: "workType", attributes: ["id", "label"] }],
+      order: [["createdAt", "DESC"]],
+    }),
+  ]);
+
+  const workOrderIds = workOrders.map((wo) => wo.id);
+
+  // Per-Work-Order cost, grouped in one query rather than N sums, so each
+  // history row can show what that specific Work Order cost. raw:true keeps
+  // the grouped aggregate a plain { workOrderId, total } row rather than a
+  // partially-hydrated model instance.
+  const costRows = workOrderIds.length
+    ? await WorkOrderCostEntry.findAll({
+        where: { workOrderId: { [Op.in]: workOrderIds } },
+        attributes: ["workOrderId", [sequelize.fn("SUM", sequelize.col("amount")), "total"]],
+        group: ["workOrderId"],
+        raw: true,
+      })
+    : [];
+  // Postgres NUMERIC aggregates come back as strings — parse explicitly
+  // before any arithmetic, same discipline as every other cost aggregate in
+  // this codebase.
+  const costByWorkOrderId = Object.fromEntries(costRows.map((r) => [r.workOrderId, Number(r.total)]));
+
+  // Lifetime Maintenance Spend is the exact same real Cost Entries just
+  // summed once more across every Work Order tied to this Asset — never a
+  // stored Asset field, so it can never drift from the entries behind it.
+  const lifetimeSpend = Object.values(costByWorkOrderId).reduce((sum, v) => sum + v, 0);
+
+  res.json({
+    ...asset.toJSON(),
+    property,
+    location,
+    workOrders: workOrders.map((wo) => ({ ...wo.toJSON(), cost: costByWorkOrderId[wo.id] ?? 0 })),
+    lifetimeSpend,
+  });
 }
 
 export async function updateAsset(req, res) {

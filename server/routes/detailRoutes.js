@@ -3,7 +3,7 @@ import { requireAuth } from "../middleware/authMiddleware.js";
 import { getPin, updatePin, deletePin } from "../controllers/pinController.js";
 import { getRepair, updateRepair, deleteRepair } from "../controllers/repairController.js";
 import { getLocation, updateLocation, archiveLocation } from "../controllers/locationController.js";
-import { getAsset, updateAsset, archiveAsset } from "../controllers/assetController.js";
+import { getAsset, updateAsset, archiveAsset, listAssetsForCompany } from "../controllers/assetController.js";
 import { getWorkOrder, updateWorkOrder, archiveWorkOrder, listWorkOrdersForCompany } from "../controllers/workOrderController.js";
 
 const pinRouter = Router();
@@ -26,6 +26,7 @@ locationRouter.delete("/:id", archiveLocation);
 
 const assetRouter = Router();
 assetRouter.use(requireAuth);
+assetRouter.get("/", listAssetsForCompany);
 assetRouter.get("/:id", getAsset);
 assetRouter.put("/:id", updateAsset);
 assetRouter.delete("/:id", archiveAsset);

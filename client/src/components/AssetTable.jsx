@@ -1,15 +1,7 @@
 import { useMemo, useState } from "react";
 import { IconSearch } from "./icons";
 
-const columns = [
-  { key: "name", label: "Asset" },
-  { key: "category", label: "Category" },
-  { key: "locationPath", label: "Location" },
-  { key: "status", label: "Status" },
-  { key: "installDate", label: "Installed" },
-];
-
-const statusBadge = {
+export const statusBadge = {
   critical: "bg-red-50 text-red-600 ring-1 ring-inset ring-red-100",
   "needs-attention": "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-100",
   operational: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100",
@@ -20,15 +12,39 @@ const statusBadge = {
 // which the existing status-text search already matches exactly). This
 // component fully remounts whenever its parent tab becomes active again, so
 // seeding on mount is sufficient; nothing needs to keep it in sync after.
-export default function AssetTable({ rows, initialQuery = "" }) {
+//
+// showPropertyContext folds Property + Location into a subtitle under the
+// Asset name (dropping the standalone Location and Installed columns) for
+// the portfolio-wide queue, where every row already needs to make its
+// property obvious and install dates would just be clutter. Property-level
+// Assets (the default) render exactly as before.
+export default function AssetTable({ rows, initialQuery = "", showPropertyContext = false, onRowClick }) {
   const [query, setQuery] = useState(initialQuery);
   const [sort, setSort] = useState({ key: "name", direction: "asc" });
+
+  const columns = useMemo(
+    () =>
+      showPropertyContext
+        ? [
+            { key: "name", label: "Asset" },
+            { key: "category", label: "Category" },
+            { key: "status", label: "Status" },
+          ]
+        : [
+            { key: "name", label: "Asset" },
+            { key: "category", label: "Category" },
+            { key: "locationPath", label: "Location" },
+            { key: "status", label: "Status" },
+            { key: "installDate", label: "Installed" },
+          ],
+    [showPropertyContext]
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((row) =>
-      [row.name, row.category, row.locationPath, row.status]
+      [row.name, row.category, row.locationPath, row.propertyName, row.status]
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(q))
     );
@@ -87,10 +103,24 @@ export default function AssetTable({ rows, initialQuery = "" }) {
           </thead>
           <tbody>
             {sorted.map((row) => (
-              <tr key={row.id} className="border-b border-gray-50 last:border-0">
-                <td className="px-5 py-3 font-medium text-gray-900">{row.name}</td>
+              <tr
+                key={row.id}
+                onClick={onRowClick ? () => onRowClick(row.id) : undefined}
+                className={`border-b border-gray-50 last:border-0 ${
+                  onRowClick ? "cursor-pointer transition hover:bg-gray-50" : ""
+                }`}
+              >
+                <td className="px-5 py-3 font-medium text-gray-900">
+                  {row.name}
+                  {showPropertyContext && (
+                    <p className="mt-0.5 truncate text-xs font-normal text-gray-400">
+                      {row.propertyName}
+                      {row.locationPath && row.locationPath !== "Property-level" && ` · ${row.locationPath}`}
+                    </p>
+                  )}
+                </td>
                 <td className="px-5 py-3 text-gray-600">{row.category}</td>
-                <td className="px-5 py-3 text-gray-600">{row.locationPath}</td>
+                {!showPropertyContext && <td className="px-5 py-3 text-gray-600">{row.locationPath}</td>}
                 <td className="px-5 py-3">
                   <span
                     className={`rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${
@@ -100,7 +130,7 @@ export default function AssetTable({ rows, initialQuery = "" }) {
                     {row.status}
                   </span>
                 </td>
-                <td className="px-5 py-3 text-gray-500">{row.installDate}</td>
+                {!showPropertyContext && <td className="px-5 py-3 text-gray-500">{row.installDate}</td>}
               </tr>
             ))}
             {sorted.length === 0 && (

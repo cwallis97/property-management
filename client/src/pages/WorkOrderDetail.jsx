@@ -563,7 +563,26 @@ export default function WorkOrderDetail() {
           </SidebarSection>
 
           <SidebarSection title="Asset">
-            <p className={`text-sm ${assetLabel ? "text-gray-900" : "text-gray-400"}`}>{assetLabel ?? "No asset linked"}</p>
+            {workOrder.assetId ? (
+              <Link
+                to={`/portfolio/${propertyId}/assets/${workOrder.assetId}`}
+                // This Work Order's OWN return-to-origin triple travels
+                // along as the payload, opaque to Asset Detail — so when
+                // its Back link returns here, this page remounts with its
+                // real original origin intact instead of losing it to a
+                // fallback.
+                state={{
+                  backLabel: "Work Order",
+                  backTo: `/portfolio/${propertyId}/work-orders/${workOrderId}`,
+                  backTabState: { backLabel, backTo, backTabState },
+                }}
+                className="text-sm font-medium text-blue-600 hover:underline"
+              >
+                {assetLabel}
+              </Link>
+            ) : (
+              <p className="text-sm text-gray-400">No asset linked</p>
+            )}
           </SidebarSection>
 
           {(workOrder.category || workOrder.workType) && (

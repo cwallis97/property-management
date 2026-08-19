@@ -79,7 +79,8 @@ The sections above describe the connected model PropertyOS is built toward. This
 
 **Built and real, operating on the graph above:**
 
-- **Property, Location, Asset** — the full property-type-neutral engine, with company-scoped multi-tenancy.
+- **Property, Location** — the full property-type-neutral engine, with company-scoped multi-tenancy.
+- **Asset** — structured `operational`/`needs-attention`/`critical` status; a real Asset Detail page (Property/Location/Category context, its active Work Orders, and its full maintenance history including completed Work Orders); a portfolio-wide Assets view (All/Needs Attention/Critical, Property filter) alongside the property-scoped one. **Lifetime Maintenance Spend and every history row's cost are always computed fresh from that Asset's real Work Orders and Cost Entries — never a stored total on the Asset record.**
 - **Work Order** — full status lifecycle (open, assigned, in_progress, waiting, completed), Active / Completed / All views, completion and reopening, all preserving full history.
 - **Work Order Notes** — append-only update history; never deleted, even after completion.
 - **Site Plan** — customer-uploaded (PDF/PNG/JPG), the spatial reference layer a Property's Work Orders position themselves against.
@@ -97,7 +98,7 @@ The sections above describe the connected model PropertyOS is built toward. This
 - **Infrastructure service relationships** — e.g. which lots a given valve or line actually serves.
 - **Vendor management as a real entity.** A cost entry can be labeled with a `vendor` cost *type* today — that's a label, not a Vendor record. There is no vendor contact info, licensing, lifetime spend, or properties-served relationship anywhere in the schema.
 - **Estimate vs. actual cost.** Every cost entry recorded today is treated as an actual, incurred amount; there is no "estimated" or "quoted" state.
-- **Richer Asset / Location cost history.** Cost currently rolls up through Work Orders into Reports; there is no direct lifetime-cost view on an Asset or Location record itself.
+- **Location cost history.** An Asset now has a derived lifetime-cost view (see above); a Location does not yet have the equivalent rollup.
 - **Broader Reports** — spend by Location, spend by Asset, cost trends over time, recurring-problem / repeat-failure detection.
 - **Exports** — CSV/PDF/Excel.
 
@@ -217,7 +218,7 @@ This allows support for many industries without changing the software.
 
 Every asset has its own profile. Examples: Water Heater, HVAC, Roof, Refrigerator, Dishwasher, Washer, Dryer, Parking Lot, Sidewalk, Pool Pump, Irrigation Controller, Trees, Street Lights, Fire Systems, Mailboxes — anything.
 
-Each asset stores: Install Date, Purchase Price, Vendor, Manufacturer, Model Number, Serial Number, Warranty, Expected Life, Photos, Invoices, Manuals, Repair History, Lifetime Cost, Notes.
+Each asset stores: Install Date, Purchase Price, Vendor, Manufacturer, Model Number, Serial Number, Warranty, Expected Life, Photos, Invoices, Manuals, Repair History, Lifetime Cost, Notes. **Version 2.0 correction:** "Lifetime Cost" and "Repair History" are superseded by the governing principle above — an Asset's maintenance history and lifetime spend are always derived live from its real Work Orders and Cost Entries, never stored as separate fields on the Asset itself.
 
 Every asset becomes its own timeline.
 

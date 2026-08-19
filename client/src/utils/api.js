@@ -97,6 +97,18 @@ export function getAssets(propertyId) {
   return apiFetch(`/api/properties/${propertyId}/assets`);
 }
 
+export function getAsset(id) {
+  return apiFetch(`/api/assets/${id}`);
+}
+
+// Portfolio-wide — every Asset across every Property the caller's company
+// owns. All | Needs Attention | Critical and Property filtering both
+// happen client-side over this one fetch, same convention as Portfolio
+// Work Orders.
+export function getPortfolioAssets() {
+  return apiFetch("/api/assets");
+}
+
 export function getWorkOrders(propertyId) {
   return apiFetch(`/api/properties/${propertyId}/work-orders`);
 }

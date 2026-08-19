@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard";
 import Portfolio from "./pages/Portfolio";
 import PropertyDetail from "./pages/PropertyDetail";
 import WorkOrderDetail from "./pages/WorkOrderDetail";
+import AssetDetail from "./pages/AssetDetail";
 import Assets from "./pages/Assets";
 import WorkOrders from "./pages/WorkOrders";
 import Reports from "./pages/Reports";
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="/portfolio" element={<Portfolio />} />
           <Route path="/portfolio/:propertyId" element={<PropertyDetail />} />
           <Route path="/portfolio/:propertyId/work-orders/:workOrderId" element={<WorkOrderDetail />} />
+          <Route path="/portfolio/:propertyId/assets/:assetId" element={<AssetDetail />} />
           <Route path="/assets" element={<Assets />} />
           <Route path="/work-orders" element={<WorkOrders />} />
           <Route path="/reports" element={<Reports />} />

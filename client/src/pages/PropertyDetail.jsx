@@ -606,7 +606,19 @@ export default function PropertyDetail() {
           )}
 
           {assetsStatus === "ready" && assets.length > 0 && (
-            <AssetTable rows={assetRows} initialQuery={assetsInitialQuery} />
+            <AssetTable
+              rows={assetRows}
+              initialQuery={assetsInitialQuery}
+              onRowClick={(id) =>
+                navigate(`/portfolio/${propertyId}/assets/${id}`, {
+                  state: {
+                    backLabel: "Assets",
+                    backTo: `/portfolio/${propertyId}`,
+                    backTabState: { tab: "assets" },
+                  },
+                })
+              }
+            />
           )}
         </div>
       )}
