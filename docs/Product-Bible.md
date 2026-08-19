@@ -22,18 +22,30 @@ This supersedes Version 1.0's framing, which listed general property management 
 
 The product is designed and tested against manufactured-housing communities first, but nothing in the schema or logic may be specific to that property type. The underlying engine must support apartments, hotels, commercial properties, and any other property type without code changes — only through the generic `Property → Location → Asset` hierarchy. Manufactured-housing-first shapes *design decisions and defaults*, not the data model.
 
+This is the specific case of a broader rule: **specialize the experience, generalize the engine.** Any given screen may be designed and tuned around one persona or one property type's real workflow — a technician reporting a water break, a manufactured-housing manager reviewing sewer spend — but the schema underneath must never encode that specialization. If a feature needs a property-type-specific column or a persona-specific table, that's a signal the design belongs one layer up, in UX, not in the data model.
+
 ## Core Operational Graph
+
+PropertyOS is one connected operational graph. Dashboard, Property, Map, Locations, Assets, Work Orders, Costs, and Reports are not separate modules — they are different interfaces onto the same underlying records. **Build one graph, then provide different views and workflows over that graph.**
 
 ```
 Property
-  → Location
-    → Asset
-      → Work Order
-        → Updates / Photos
-          → future Vendors / Costs / History
+  → Site Plan (uploaded spatial reference layer)
+  → Location (self-referential hierarchy — Lot, Building, Floor, Unit, Suite, ...)
+  → Asset
+  → Work Order
+      → Location / Asset (optional context, not required for either)
+      → Map Position (mapX, mapY — a normalized point on the Property's Site Plan)
+      → Category → Work Type (stable reference identity, not free text)
+      → Cost Entries (itemized, dated by when the expense was incurred)
+      → Notes / status history (completion never deletes it)
+
+Cost Entries → Reports (spend grouped by Category → Work Type → Work Order, reconciling at every level)
 ```
 
-Every experience in the product — Dashboard, Property, Map, Work Order, Asset, Reports — is a different view onto this one graph, not a separate data model.
+Every real capability above operates on these same records — there is no parallel "reporting truth" or "map truth" that duplicates a Work Order, a cost, or a position. A dollar shown in a report, a marker shown on a map, and a row shown in a Work Order list must all trace back to the identical underlying row.
+
+**Connected architecture does not mean every future capability must be implemented immediately.** The graph is deliberately built to extend cleanly — new node types and new relationships can be added later — without meaning those extensions exist today. See "Current Implementation State" below for what is actually built versus what remains roadmap.
 
 ## Spatial Operations Principle
 
@@ -60,6 +72,34 @@ Every cost entry carries its own **costDate** — the calendar day the expense w
 Reports are derived from the same operational records Work Orders and the Property Map already use — a dollar shown in a report always traces back to a real Work Order and its real cost entries; there is no separate reporting truth. Maintenance Spend includes recorded cost entries regardless of whether their parent Work Order is still active or already completed: a cost entry is a real recorded amount the moment it exists, and Work Order status answers a different question (is the work done) than cost entries do (what has been spent). An open Work Order with real recorded costs contributes those dollars to spend for whichever period(s) its cost entries' costDate values fall into, exactly as a completed one would.
 
 "Average Cost / Work Order" is always computed over Work Orders that have at least one recorded cost entry in the current scope — a Work Order with no recorded cost is absent from that calculation, never treated as a $0 data point that would silently pull the average down. Every ranked breakdown (by Category, by Work Type) must reconcile exactly against the summary total above it, including an explicit "Uncategorized" bucket for spend on Work Orders that haven't been classified yet — no dollar is ever silently dropped from a breakdown just because it lacks a category or Work Type.
+
+## Current Implementation State
+
+The sections above describe the connected model PropertyOS is built toward. This section states plainly what already exists in the running product versus what remains roadmap, so the graph's connectedness is never mistaken for the graph's completeness. Update this section as capabilities actually ship — do not mark something built until it is.
+
+**Built and real, operating on the graph above:**
+
+- **Property, Location, Asset** — the full property-type-neutral engine, with company-scoped multi-tenancy.
+- **Work Order** — full status lifecycle (open, assigned, in_progress, waiting, completed), Active / Completed / All views, completion and reopening, all preserving full history.
+- **Work Order Notes** — append-only update history; never deleted, even after completion.
+- **Site Plan** — customer-uploaded (PDF/PNG/JPG), the spatial reference layer a Property's Work Orders position themselves against.
+- **Work Order map position** (`mapX`/`mapY`) — both **Report Issue** (map-first) and **Mark Location on Map** (Work-Order-first) write to the same Work Order record; there is no separate spatial record.
+- **Category** — a small validated set of values directly on the Work Order.
+- **Work Type** — a normalized, stable-identity reference table (not free text). Global/shared taxonomy today, with a reserved column for future company-specific types.
+- **Cost Entries** — itemized, each carrying its own `costDate`; a Work Order's cost is always derived by summing its entries, never stored separately.
+- **Reports V1 (Maintenance Spend)** — company-scoped SQL aggregation, Category → Work Type → Work Order drill-down, date-range and property filters, values that reconcile exactly at every level.
+
+**Roadmap — real parts of the intended graph, not yet built. Do not treat these as implemented:**
+
+- **Reports → Map** ("View on Map" — viewing a report's matching Work Orders spatially on the Site Plan). Architecture reviewed (Milestone 8C); no code exists yet.
+- **Point / line / polygon geometry.** The Site Plan today supports only point positions (a Work Order's `mapX`/`mapY`). Lines (water/sewer/electrical runs) and polygons (parcels, zones) don't exist.
+- **Infrastructure layers** — toggleable Water/Sewer/Electrical/Roads/etc. overlays.
+- **Infrastructure service relationships** — e.g. which lots a given valve or line actually serves.
+- **Vendor management as a real entity.** A cost entry can be labeled with a `vendor` cost *type* today — that's a label, not a Vendor record. There is no vendor contact info, licensing, lifetime spend, or properties-served relationship anywhere in the schema.
+- **Estimate vs. actual cost.** Every cost entry recorded today is treated as an actual, incurred amount; there is no "estimated" or "quoted" state.
+- **Richer Asset / Location cost history.** Cost currently rolls up through Work Orders into Reports; there is no direct lifetime-cost view on an Asset or Location record itself.
+- **Broader Reports** — spend by Location, spend by Asset, cost trends over time, recurring-problem / repeat-failure detection.
+- **Exports** — CSV/PDF/Excel.
 
 ## Core Experience
 
