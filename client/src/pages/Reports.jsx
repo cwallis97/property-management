@@ -4,6 +4,7 @@ import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import SectionSpinner from "../components/SectionSpinner";
 import SearchableSelect from "../components/SearchableSelect";
+import ReportSpendMap from "../components/ReportSpendMap";
 import { statusBadge, statusLabel } from "../components/WorkOrderTable";
 import { IconAlertTriangle, IconWrench } from "../components/icons";
 import { getProperties, getMaintenanceSpendSummary, getMaintenanceSpendWorkOrders } from "../utils/api";
@@ -76,6 +77,11 @@ export default function Reports() {
   const [categoryLabelText, setCategoryLabelText] = useState(restored?.categoryLabel ?? null);
   const [workTypeId, setWorkTypeId] = useState(restored?.workTypeId ?? null);
   const [workTypeLabelText, setWorkTypeLabelText] = useState(restored?.workTypeLabel ?? null);
+  // Map view is only ever meaningful at the Work Order drill level, scoped
+  // to a single property — see the guard effect below, which drops back to
+  // List the moment either condition stops holding (e.g. switching to All
+  // Properties, or drilling back up to Category).
+  const [viewMode, setViewMode] = useState(restored?.viewMode ?? "list");
 
   const [properties, setProperties] = useState([]);
   useEffect(() => {
@@ -143,6 +149,10 @@ export default function Reports() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workTypeId, startDate, endDate, propertyId, category]);
 
+  useEffect(() => {
+    if (viewMode === "map" && (!workTypeId || !propertyId)) setViewMode("list");
+  }, [viewMode, workTypeId, propertyId]);
+
   const propertyOptions = useMemo(() => {
     const options = [{ value: null, label: "All Properties", sublabel: null }];
     for (const p of properties) options.push({ value: p.id, label: p.name, sublabel: null });
@@ -154,6 +164,7 @@ export default function Reports() {
     setCategoryLabelText(null);
     setWorkTypeId(null);
     setWorkTypeLabelText(null);
+    setViewMode("list");
   }
 
   function selectCategory(row) {
@@ -161,6 +172,7 @@ export default function Reports() {
     setCategoryLabelText(row.label);
     setWorkTypeId(null);
     setWorkTypeLabelText(null);
+    setViewMode("list");
   }
 
   function selectWorkType(row) {
@@ -169,8 +181,16 @@ export default function Reports() {
   }
 
   // Carried into WorkOrderDetail's router state so "← Back to Maintenance
-  // Spend" restores this exact scope — filters, drill depth, and all.
-  const reportState = { rangeKey, propertyId, category, categoryLabel: categoryLabelText, workTypeId, workTypeLabel: workTypeLabelText };
+  // Spend" restores this exact scope — filters, drill depth, view mode, all.
+  const reportState = {
+    rangeKey,
+    propertyId,
+    category,
+    categoryLabel: categoryLabelText,
+    workTypeId,
+    workTypeLabel: workTypeLabelText,
+    viewMode,
+  };
 
   const breakdownLabel = category ? "Work Type" : "Category";
 
@@ -227,6 +247,7 @@ export default function Reports() {
                       onClick={() => {
                         setWorkTypeId(null);
                         setWorkTypeLabelText(null);
+                        setViewMode("list");
                       }}
                       className="text-gray-500 transition hover:text-gray-900"
                     >
@@ -274,7 +295,36 @@ export default function Reports() {
 
           {workTypeId && (
             <div>
-              <h2 className="mb-3 text-sm font-semibold text-gray-900">Work Orders</h2>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-gray-900">Work Orders</h2>
+
+                <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("list")}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                      viewMode === "list" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    List
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!propertyId}
+                    title={propertyId ? undefined : "Select a single property to view Work Orders on the map."}
+                    onClick={() => propertyId && setViewMode("map")}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                      viewMode === "map" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                    } ${!propertyId ? "cursor-not-allowed opacity-50" : ""}`}
+                  >
+                    Map
+                  </button>
+                </div>
+              </div>
+
+              {!propertyId && (
+                <p className="mb-3 text-xs text-gray-400">Select a single property above to view these Work Orders on the map.</p>
+              )}
 
               {workOrdersStatus === "loading" && <SectionSpinner />}
               {workOrdersStatus === "error" && (
@@ -285,7 +335,7 @@ export default function Reports() {
                 <EmptyState icon={IconWrench} title="No Work Orders in this range" description="Nothing recorded cost here for the current filters." />
               )}
 
-              {workOrdersStatus === "ready" && workOrders.length > 0 && (
+              {workOrdersStatus === "ready" && workOrders.length > 0 && viewMode === "list" && (
                 <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
                   {workOrders.map((wo) => (
                     <Link
@@ -317,6 +367,10 @@ export default function Reports() {
                     </Link>
                   ))}
                 </div>
+              )}
+
+              {workOrdersStatus === "ready" && workOrders.length > 0 && viewMode === "map" && propertyId && (
+                <ReportSpendMap propertyId={propertyId} matchingWorkOrders={workOrders} reportState={reportState} />
               )}
             </div>
           )}
