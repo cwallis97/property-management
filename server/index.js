@@ -10,10 +10,12 @@ import workOrderNoteRoutes from "./routes/workOrderNoteRoutes.js";
 import workOrderCostRoutes from "./routes/workOrderCostRoutes.js";
 import workTypeRoutes from "./routes/workTypeRoutes.js";
 import vendorRoutes from "./routes/vendorRoutes.js";
+import documentRoutes from "./routes/documentRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
-import { ensureUploadDir } from "./utils/sitePlanStorage.js";
+import { ensureUploadDir as ensureSitePlanUploadDir } from "./utils/sitePlanStorage.js";
+import { ensureUploadDir as ensureDocumentUploadDir } from "./utils/documentStorage.js";
 
 const app = express();
 app.use(cors());
@@ -31,6 +33,7 @@ app.use("/api/work-orders", workOrderNoteRoutes);
 app.use("/api/work-orders", workOrderCostRoutes);
 app.use("/api/work-types", workTypeRoutes);
 app.use("/api/vendors", vendorRoutes);
+app.use("/api/documents", documentRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/users", userRoutes);
@@ -43,7 +46,8 @@ const PORT = process.env.PORT || 4000;
 async function start() {
   await sequelize.authenticate();
   console.log("Database connection established.");
-  await ensureUploadDir();
+  await ensureSitePlanUploadDir();
+  await ensureDocumentUploadDir();
   app.listen(PORT, () => console.log(`API listening on port ${PORT}`));
 }
 

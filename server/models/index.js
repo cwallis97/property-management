@@ -19,6 +19,7 @@ import { initWorkTypeModel, WorkType, WORK_ORDER_CATEGORIES } from "./WorkType.j
 import { initWorkOrderCostEntryModel, WorkOrderCostEntry, WORK_ORDER_COST_TYPES } from "./WorkOrderCostEntry.js";
 import { initVendorModel, Vendor, VENDOR_STATUSES } from "./Vendor.js";
 import { initWorkOrderVendorModel, WorkOrderVendor } from "./WorkOrderVendor.js";
+import { initDocumentModel, Document, DOCUMENT_CATEGORIES, DOCUMENT_ALLOWED_MIME_TYPES } from "./Document.js";
 
 initUserModel(sequelize);
 initCompanyModel(sequelize);
@@ -35,6 +36,7 @@ initWorkTypeModel(sequelize);
 initWorkOrderCostEntryModel(sequelize);
 initVendorModel(sequelize);
 initWorkOrderVendorModel(sequelize);
+initDocumentModel(sequelize);
 
 User.belongsToMany(Company, { through: Membership, foreignKey: "userId", otherKey: "companyId", as: "companies" });
 Company.belongsToMany(User, { through: Membership, foreignKey: "companyId", otherKey: "userId", as: "users" });
@@ -135,6 +137,29 @@ WorkOrderVendor.belongsTo(Vendor, { foreignKey: "vendorId", as: "vendor" });
 Vendor.hasMany(WorkOrderCostEntry, { foreignKey: "vendorId", as: "costEntries", onDelete: "RESTRICT" });
 WorkOrderCostEntry.belongsTo(Vendor, { foreignKey: "vendorId", as: "vendor" });
 
+// Document attaches to exactly one of Property/Asset/WorkOrder/Vendor (see
+// the migration's CHECK constraint) — RESTRICT on all four, same
+// historical-record protection as WorkOrderNote/WorkOrderCostEntry/
+// WorkOrderVendor. companyId is direct (mirrors Vendor's own pattern),
+// since the four attachment types have four different ownership chains.
+Company.hasMany(Document, { foreignKey: "companyId", as: "documents", onDelete: "CASCADE" });
+Document.belongsTo(Company, { foreignKey: "companyId", as: "company" });
+
+Property.hasMany(Document, { foreignKey: "propertyId", as: "documents", onDelete: "RESTRICT" });
+Document.belongsTo(Property, { foreignKey: "propertyId", as: "property" });
+
+Asset.hasMany(Document, { foreignKey: "assetId", as: "documents", onDelete: "RESTRICT" });
+Document.belongsTo(Asset, { foreignKey: "assetId", as: "asset" });
+
+WorkOrder.hasMany(Document, { foreignKey: "workOrderId", as: "documents", onDelete: "RESTRICT" });
+Document.belongsTo(WorkOrder, { foreignKey: "workOrderId", as: "workOrder" });
+
+Vendor.hasMany(Document, { foreignKey: "vendorId", as: "documents", onDelete: "RESTRICT" });
+Document.belongsTo(Vendor, { foreignKey: "vendorId", as: "vendor" });
+
+User.hasMany(Document, { foreignKey: "uploadedByUserId", as: "documents", onDelete: "SET NULL" });
+Document.belongsTo(User, { foreignKey: "uploadedByUserId", as: "uploadedBy" });
+
 export {
   sequelize,
   User,
@@ -156,6 +181,9 @@ export {
   Vendor,
   VENDOR_STATUSES,
   WorkOrderVendor,
+  Document,
+  DOCUMENT_CATEGORIES,
+  DOCUMENT_ALLOWED_MIME_TYPES,
   PIN_TYPES,
   SEVERITY_LEVELS,
   REPAIR_STATUSES,

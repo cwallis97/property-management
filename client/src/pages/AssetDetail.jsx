@@ -5,6 +5,7 @@ import SectionSpinner from "../components/SectionSpinner";
 import { IconAlertTriangle, IconArrowLeft, IconWrench } from "../components/icons";
 import { priorityBadge, statusBadge as woStatusBadge, statusLabel } from "../components/WorkOrderTable";
 import { statusBadge as assetStatusBadge } from "../components/AssetTable";
+import EntityDocuments from "../components/EntityDocuments";
 import { formatAge, isOverdue, ACTIVE_WORK_ORDER_STATUSES, categoryLabel } from "../utils/workOrders";
 import { getAsset } from "../utils/api";
 
@@ -243,6 +244,10 @@ export default function AssetDetail() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="mt-8">
+        <EntityDocuments attachment={{ assetId }} />
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import SectionSpinner from "../components/SectionSpinner";
 import { IconAlertTriangle, IconArrowLeft, IconTruck } from "../components/icons";
 import { statusBadge as woStatusBadge, statusLabel } from "../components/WorkOrderTable";
 import { statusBadge as vendorStatusBadge } from "../components/VendorTable";
+import EntityDocuments from "../components/EntityDocuments";
 import { categoryLabel } from "../utils/workOrders";
 import { getVendor } from "../utils/api";
 
@@ -184,6 +185,10 @@ export default function VendorDetail() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="mt-8">
+        <EntityDocuments attachment={{ vendorId }} />
       </div>
     </div>
   );

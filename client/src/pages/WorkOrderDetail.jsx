@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import EmptyState from "../components/EmptyState";
 import SectionSpinner from "../components/SectionSpinner";
 import SearchableSelect from "../components/SearchableSelect";
+import EntityDocuments from "../components/EntityDocuments";
 import { IconAlertTriangle, IconArrowLeft, IconWrench } from "../components/icons";
 import { priorityBadge, statusBadge, statusLabel } from "../components/WorkOrderTable";
 import {
@@ -736,6 +737,8 @@ export default function WorkOrderDetail() {
               </form>
             )}
           </div>
+
+          <EntityDocuments attachment={{ workOrderId }} />
         </div>
 
         <div className="space-y-6">

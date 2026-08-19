@@ -68,11 +68,11 @@ export async function apiFetchBlob(path) {
 
 // For multipart file uploads — deliberately does NOT set Content-Type
 // itself, so the browser can attach the correct multipart boundary.
-export async function apiUpload(path, formData) {
+export async function apiUpload(path, formData, method = "POST") {
   const token = await getAuthToken();
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
-    method: "POST",
+    method,
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
   });
@@ -216,8 +216,11 @@ export function createWorkOrderCost(workOrderId, payload) {
 }
 
 // Drops undefined/null values before building a query string, so callers
-// can pass a filter object with optional keys directly.
-function toQueryString(params) {
+// can pass a filter object with optional keys directly. Defaults to {} so
+// calling with no params at all (an intentionally unfiltered list, e.g.
+// the global Documents page) is safe rather than throwing on
+// Object.entries(undefined).
+function toQueryString(params = {}) {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && value !== "") query.set(key, value);
@@ -232,4 +235,50 @@ export function getMaintenanceSpendSummary(params) {
 
 export function getMaintenanceSpendWorkOrders(params) {
   return apiFetch(`/api/reports/maintenance-spend/work-orders${toQueryString(params)}`);
+}
+
+// params accepts one optional attachment filter (propertyId | assetId |
+// workOrderId | vendorId) — the same endpoint serves both the global
+// Documents page (no filter) and every EntityDocuments section (one
+// filter). Archived Documents are included; hiding them by default is a
+// frontend concern, same convention as Active/Completed/All elsewhere.
+export function getDocuments(params = {}) {
+  return apiFetch(`/api/documents${toQueryString(params)}`);
+}
+
+export function createDocument(formData) {
+  return apiUpload("/api/documents", formData);
+}
+
+export function updateDocument(id, payload) {
+  return apiFetch(`/api/documents/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function replaceDocumentFile(id, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload(`/api/documents/${id}/file`, formData, "PUT");
+}
+
+export function archiveDocument(id) {
+  return apiFetch(`/api/documents/${id}`, { method: "DELETE" });
+}
+
+export function getDocumentFileBlob(id) {
+  return apiFetchBlob(`/api/documents/${id}/file`);
+}
+
+// Auth-gated files can't be opened via a plain <a href> (the browser
+// wouldn't send the Authorization header on a plain navigation) — fetch
+// the bytes as a blob, then hand the browser an object URL to open
+// instead. Revoked after a short delay rather than immediately, so the
+// new tab has time to actually load it.
+export async function openDocumentFile(id) {
+  const blob = await getDocumentFileBlob(id);
+  const objectUrl = URL.createObjectURL(blob);
+  window.open(objectUrl, "_blank");
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
 }

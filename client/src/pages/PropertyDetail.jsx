@@ -11,6 +11,7 @@ import WorkOrderTable, { priorityBadge, statusBadge, statusLabel } from "../comp
 import WorkOrderViewFilter from "../components/WorkOrderViewFilter";
 import CreateWorkOrderModal from "../components/CreateWorkOrderModal";
 import CreateAssetModal from "../components/CreateAssetModal";
+import EntityDocuments from "../components/EntityDocuments";
 import { IconBuilding, IconAlertTriangle, IconBox, IconWrench, IconPlus } from "../components/icons";
 import { getProperty, getLocations, getAssets, getWorkOrders } from "../utils/api";
 import { formatAge, isOverdue, needsAttention, compareByAttention, filterWorkOrdersByView } from "../utils/workOrders";
@@ -21,6 +22,7 @@ const TABS = [
   { key: "locations", label: "Locations" },
   { key: "assets", label: "Assets" },
   { key: "work-orders", label: "Work Orders" },
+  { key: "documents", label: "Documents" },
 ];
 
 // One divided stat cell inside a single shared strip — same visual pattern
@@ -736,6 +738,8 @@ export default function PropertyDetail() {
           )}
         </div>
       )}
+
+      {activeTab === "documents" && <EntityDocuments attachment={{ propertyId }} />}
 
       {showCreateModal && (
         <CreateWorkOrderModal
