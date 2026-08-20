@@ -55,51 +55,51 @@ export default function SearchableSelect({ value, onChange, options, placeholder
         onClick={() => setOpen((o) => !o)}
         className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition ${
           disabled
-            ? "cursor-not-allowed border-gray-100 bg-gray-50 text-gray-500"
-            : "border-gray-200 bg-white text-gray-900 hover:border-gray-300"
+            ? "cursor-not-allowed border-line bg-surface-subtle text-ink-secondary"
+            : "border-line bg-surface text-ink hover:border-line-strong"
         }`}
       >
         <span className="min-w-0 truncate">
           {selected ? (
             <>
               {selected.label}
-              {selected.sublabel && <span className="ml-1.5 text-gray-400">· {selected.sublabel}</span>}
+              {selected.sublabel && <span className="ml-1.5 text-ink-muted">· {selected.sublabel}</span>}
             </>
           ) : (
-            <span className="text-gray-400">{placeholder}</span>
+            <span className="text-ink-muted">{placeholder}</span>
           )}
         </span>
-        {!disabled && <IconChevronDown className="h-4 w-4 shrink-0 text-gray-400" />}
+        {!disabled && <IconChevronDown className="h-4 w-4 shrink-0 text-ink-muted" />}
       </button>
 
-      {disabled && disabledHint && <p className="mt-1 text-xs text-gray-400">{disabledHint}</p>}
+      {disabled && disabledHint && <p className="mt-1 text-xs text-ink-muted">{disabledHint}</p>}
 
       {open && !disabled && (
-        <div className="absolute z-20 mt-1.5 w-full rounded-xl border border-gray-200 bg-white shadow-lg shadow-gray-900/5">
-          <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2.5">
-            <IconSearch className="h-4 w-4 shrink-0 text-gray-400" />
+        <div className="absolute z-20 mt-1.5 w-full rounded-xl border border-line bg-surface shadow-lg shadow-gray-900/5">
+          <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
+            <IconSearch className="h-4 w-4 shrink-0 text-ink-muted" />
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Filter..."
-              className="w-full border-none bg-transparent text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none"
+              className="w-full border-none bg-transparent text-sm text-ink-secondary placeholder:text-ink-muted focus:outline-none"
             />
           </div>
           <div className="max-h-64 overflow-y-auto py-1">
-            {filtered.length === 0 && <p className="px-3 py-3 text-sm text-gray-400">No matches.</p>}
+            {filtered.length === 0 && <p className="px-3 py-3 text-sm text-ink-muted">No matches.</p>}
             {filtered.map((option) => (
               <button
                 key={option.value ?? "__none__"}
                 type="button"
                 onClick={() => pick(option.value)}
-                className={`flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-gray-50 ${
-                  option.value === value ? "bg-gray-50" : ""
+                className={`flex w-full flex-col px-3 py-2 text-left text-sm transition hover:bg-surface-subtle ${
+                  option.value === value ? "bg-surface-subtle" : ""
                 }`}
               >
-                <span className="text-gray-900">{option.label}</span>
-                {option.sublabel && <span className="text-xs text-gray-400">{option.sublabel}</span>}
+                <span className="text-ink">{option.label}</span>
+                {option.sublabel && <span className="text-xs text-ink-muted">{option.sublabel}</span>}
               </button>
             ))}
           </div>

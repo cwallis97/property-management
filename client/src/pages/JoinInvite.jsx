@@ -87,54 +87,54 @@ export default function JoinInvite() {
   const emailMatches = firebaseUser && firebaseUser.email?.toLowerCase() === invite?.email?.toLowerCase();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8">
-      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+    <div className="flex min-h-screen items-center justify-center bg-surface-subtle px-4 py-8">
+      <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-8 shadow-sm">
         <div className="mb-6 flex items-center gap-2.5">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-900 text-xs font-bold text-white">P</span>
-          <span className="text-[15px] font-semibold tracking-tight text-gray-900">PropertyOS</span>
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-xs font-bold text-accent-ink">P</span>
+          <span className="text-[15px] font-semibold tracking-tight text-ink">PropertyOS</span>
         </div>
 
-        {status === "loading" && <p className="text-sm text-gray-500">Loading invitation…</p>}
+        {status === "loading" && <p className="text-sm text-ink-secondary">Loading invitation…</p>}
 
         {status === "not-found" && (
           <div>
-            <h1 className="text-lg font-semibold text-gray-900">Invitation not found</h1>
-            <p className="mt-2 text-sm text-gray-500">This invitation link is invalid. Ask your admin to send a new one.</p>
+            <h1 className="text-lg font-semibold text-ink">Invitation not found</h1>
+            <p className="mt-2 text-sm text-ink-secondary">This invitation link is invalid. Ask your admin to send a new one.</p>
           </div>
         )}
 
         {status === "error" && (
           <div>
-            <h1 className="text-lg font-semibold text-gray-900">Something went wrong</h1>
-            <p className="mt-2 text-sm text-gray-500">Please try again in a moment.</p>
+            <h1 className="text-lg font-semibold text-ink">Something went wrong</h1>
+            <p className="mt-2 text-sm text-ink-secondary">Please try again in a moment.</p>
           </div>
         )}
 
         {status === "ready" && invite && invite.status !== "pending" && (
           <div>
-            <h1 className="text-lg font-semibold text-gray-900">Invitation unavailable</h1>
-            <p className="mt-2 text-sm text-gray-500">{STATUS_MESSAGE[invite.status] || "This invitation is no longer valid."}</p>
+            <h1 className="text-lg font-semibold text-ink">Invitation unavailable</h1>
+            <p className="mt-2 text-sm text-ink-secondary">{STATUS_MESSAGE[invite.status] || "This invitation is no longer valid."}</p>
           </div>
         )}
 
         {status === "ready" && invite && invite.status === "pending" && (
           <div>
-            <h1 className="text-lg font-semibold text-gray-900">You're invited to join {invite.companyName}</h1>
-            <p className="mt-1.5 text-sm text-gray-500">
-              <span className="font-medium text-gray-700">{invite.email}</span> · joining as{" "}
-              <span className="font-medium text-gray-700">{roleLabel[invite.role] || invite.role}</span>
+            <h1 className="text-lg font-semibold text-ink">You're invited to join {invite.companyName}</h1>
+            <p className="mt-1.5 text-sm text-ink-secondary">
+              <span className="font-medium text-ink-secondary">{invite.email}</span> · joining as{" "}
+              <span className="font-medium text-ink-secondary">{roleLabel[invite.role] || invite.role}</span>
             </p>
 
-            {firebaseUser === undefined && <p className="mt-6 text-sm text-gray-400">Checking sign-in status…</p>}
+            {firebaseUser === undefined && <p className="mt-6 text-sm text-ink-muted">Checking sign-in status…</p>}
 
             {firebaseUser === null && (
               <div className="mt-6">
-                <div className="mb-4 inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                <div className="mb-4 inline-flex rounded-lg border border-line bg-surface-subtle p-1">
                   <button
                     type="button"
                     onClick={() => setAuthMode("signup")}
                     className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                      authMode === "signup" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                      authMode === "signup" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
                     }`}
                   >
                     Create account
@@ -143,7 +143,7 @@ export default function JoinInvite() {
                     type="button"
                     onClick={() => setAuthMode("signin")}
                     className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                      authMode === "signin" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                      authMode === "signin" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
                     }`}
                   >
                     I already have an account
@@ -152,30 +152,30 @@ export default function JoinInvite() {
 
                 <form onSubmit={handleAuthSubmit} className="space-y-4">
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-900">Email</label>
+                    <label className="mb-1.5 block text-sm font-medium text-ink">Email</label>
                     <input
                       type="email"
                       value={invite.email}
                       disabled
-                      className="w-full rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm text-gray-500"
+                      className="w-full rounded-lg border border-line bg-surface-subtle px-3 py-2.5 text-sm text-ink-secondary"
                     />
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-900">Password</label>
+                    <label className="mb-1.5 block text-sm font-medium text-ink">Password</label>
                     <input
                       type="password"
                       autoFocus
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
                     />
                   </div>
-                  {authError && <p className="text-sm text-red-600">{authError}</p>}
+                  {authError && <p className="text-sm text-red-600 dark:text-red-400">{authError}</p>}
                   <button
                     type="submit"
                     disabled={authSubmitting}
-                    className="w-full rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {authSubmitting ? "Please wait…" : authMode === "signup" ? "Create account" : "Sign in"}
                   </button>
@@ -185,15 +185,15 @@ export default function JoinInvite() {
 
             {firebaseUser && emailMatches && (
               <div className="mt-6">
-                <p className="mb-3 text-sm text-gray-500">
-                  Signed in as <span className="font-medium text-gray-700">{firebaseUser.email}</span>.
+                <p className="mb-3 text-sm text-ink-secondary">
+                  Signed in as <span className="font-medium text-ink-secondary">{firebaseUser.email}</span>.
                 </p>
-                {acceptError && <p className="mb-3 text-sm text-red-600">{acceptError}</p>}
+                {acceptError && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{acceptError}</p>}
                 <button
                   type="button"
                   disabled={accepting}
                   onClick={handleAccept}
-                  className="w-full rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {accepting ? "Joining…" : `Join ${invite.companyName}`}
                 </button>
@@ -202,14 +202,14 @@ export default function JoinInvite() {
 
             {firebaseUser && !emailMatches && (
               <div className="mt-6">
-                <p className="text-sm text-red-600">
+                <p className="text-sm text-red-600 dark:text-red-400">
                   You're signed in as {firebaseUser.email}, but this invitation is for {invite.email}. Sign out and sign in with
                   the invited email to continue.
                 </p>
                 <button
                   type="button"
                   onClick={() => signOut(auth)}
-                  className="mt-3 w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                  className="mt-3 w-full rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-ink-secondary transition hover:bg-surface-subtle"
                 >
                   Sign out
                 </button>

@@ -20,14 +20,14 @@ const VIEWS = [
 // kept as its own small local control.
 function PropertyViewFilter({ value, onChange }) {
   return (
-    <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+    <div className="inline-flex rounded-lg border border-line bg-surface-subtle p-1">
       {VIEWS.map((view) => (
         <button
           key={view.value}
           type="button"
           onClick={() => onChange(view.value)}
           className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-            value === view.value ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            value === view.value ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
           }`}
         >
           {view.label}
@@ -96,7 +96,7 @@ export default function Portfolio() {
             <button
               type="button"
               onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-hover"
             >
               <IconPlus className="h-4 w-4" />
               Add Property
@@ -106,8 +106,8 @@ export default function Portfolio() {
       )}
 
       {status === "loading" && (
-        <div className="flex items-center justify-center rounded-2xl border border-gray-200 bg-white py-24">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
+        <div className="flex items-center justify-center rounded-2xl border border-line bg-surface py-24">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-accent" />
         </div>
       )}
 
@@ -124,33 +124,33 @@ export default function Portfolio() {
       )}
 
       {status === "ready" && properties.length > 0 && (
-        <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+        <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
           {properties.map((property) => (
             <Link
               key={property.id}
               to={`/portfolio/${property.id}`}
-              className="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-gray-50"
+              className="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-surface-subtle"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-50 text-gray-400">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-subtle text-ink-muted">
                   <IconBuilding className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-gray-900">
+                  <p className="truncate text-sm font-medium text-ink">
                     {property.name}
                     {property.status === "archived" && (
-                      <span className="ml-2 rounded-full bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400 ring-1 ring-inset ring-gray-100">
+                      <span className="ml-2 rounded-full bg-surface-subtle px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted ring-1 ring-inset ring-line">
                         Archived
                       </span>
                     )}
                   </p>
-                  <p className="truncate text-xs text-gray-500">
+                  <p className="truncate text-xs text-ink-secondary">
                     {property.address || "No address on file"}
                   </p>
                 </div>
               </div>
               {property.type && (
-                <span className="shrink-0 rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-500">
+                <span className="shrink-0 rounded-full bg-surface-subtle px-2.5 py-1 text-xs font-medium text-ink-secondary">
                   {property.type}
                 </span>
               )}

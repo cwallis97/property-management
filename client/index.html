@@ -4,13 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-      Sets data-theme on <html> synchronously, before React (or any CSS
-      that will eventually react to it) ever paints — the standard
-      flash-of-wrong-theme fix. ThemeProvider (src/context/ThemeContext.jsx)
-      keeps this in sync afterward for every subsequent preference change;
-      this script only owns the very first paint. No CSS currently reads
-      data-theme at all (that's the next milestone's actual dark styling),
-      so today this is inert groundwork, not a visible behavior change.
+      Sets data-theme on <html> synchronously, before React (or index.css's
+      dark: variant/tokens) ever paints — the standard flash-of-wrong-theme
+      fix. ThemeProvider (src/context/ThemeContext.jsx) keeps this in sync
+      afterward for every subsequent preference change; this script only
+      owns the very first paint.
     -->
     <script>
       (function () {

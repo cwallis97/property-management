@@ -8,12 +8,12 @@ function LeafRow({ location, compact }) {
     <div
       className={
         compact
-          ? "flex items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 hover:bg-gray-50"
+          ? "flex items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 hover:bg-surface-subtle"
           : "flex items-center justify-between gap-4 px-5 py-3"
       }
     >
-      <p className="truncate text-sm font-medium text-gray-900">{location.name}</p>
-      <span className="shrink-0 rounded-full bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-500">
+      <p className="truncate text-sm font-medium text-ink">{location.name}</p>
+      <span className="shrink-0 rounded-full bg-surface-subtle px-2.5 py-1 text-[11px] font-medium text-ink-secondary">
         {location.type}
       </span>
     </div>
@@ -34,10 +34,10 @@ function LocationGroup({ location, depth }) {
 
   if (depth === 0) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-5">
+      <div className="rounded-2xl border border-line bg-surface p-5">
         <div className="mb-4 flex items-baseline gap-2">
-          <h3 className="text-[15px] font-semibold text-gray-900">{location.name}</h3>
-          <span className="text-xs font-medium text-gray-400">{location.type}</span>
+          <h3 className="text-[15px] font-semibold text-ink">{location.name}</h3>
+          <span className="text-xs font-medium text-ink-muted">{location.type}</span>
         </div>
         <div className="space-y-4">
           {location.children.map((child) => (
@@ -50,11 +50,11 @@ function LocationGroup({ location, depth }) {
 
   return (
     <div>
-      <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">
+      <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-secondary">
         {location.name}
-        <span className="ml-1.5 normal-case text-gray-300">· {location.type}</span>
+        <span className="ml-1.5 normal-case text-ink-muted">· {location.type}</span>
       </p>
-      <div className="space-y-1 border-l border-gray-100 pl-3">
+      <div className="space-y-1 border-l border-line pl-3">
         {location.children.map((child) => (
           <LocationGroup key={child.id} location={child} depth={depth + 1} />
         ))}
@@ -77,9 +77,9 @@ export default function LocationList({ locations }) {
       {standalones.length > 0 && (
         <div>
           {groups.length > 0 && (
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">Other locations</p>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-muted">Other locations</p>
           )}
-          <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+          <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
             {standalones.map((location) => (
               <LeafRow key={location.id} location={location} />
             ))}

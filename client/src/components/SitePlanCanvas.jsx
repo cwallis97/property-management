@@ -121,19 +121,19 @@ export default function SitePlanCanvas({
   return (
     <div className="relative">
       <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
-        <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-50">
+        <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-sm font-medium text-ink-secondary shadow-sm transition hover:bg-surface-subtle">
           −
         </button>
-        <button type="button" onClick={() => zoomBy(ZOOM_STEP)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-50">
+        <button type="button" onClick={() => zoomBy(ZOOM_STEP)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-sm font-medium text-ink-secondary shadow-sm transition hover:bg-surface-subtle">
           +
         </button>
-        <button type="button" onClick={resetView} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm transition hover:bg-gray-50">
+        <button type="button" onClick={resetView} className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink-secondary shadow-sm transition hover:bg-surface-subtle">
           Reset view
         </button>
       </div>
 
       <div
-        className="flex items-center justify-center overflow-hidden rounded-xl bg-gray-50"
+        className="flex items-center justify-center overflow-hidden rounded-xl bg-surface-subtle"
         style={{ height, cursor: pickMode ? "crosshair" : canPan ? "grab" : "default" }}
         onWheel={handleWheel}
         onPointerDown={handleViewportPointerDown}

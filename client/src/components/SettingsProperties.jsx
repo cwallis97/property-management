@@ -16,14 +16,14 @@ const VIEWS = [
 // point to both groups, not a general browsing view.
 function PropertyLifecycleFilter({ value, onChange }) {
   return (
-    <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+    <div className="inline-flex rounded-lg border border-line bg-surface-subtle p-1">
       {VIEWS.map((view) => (
         <button
           key={view.value}
           type="button"
           onClick={() => onChange(view.value)}
           className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-            value === view.value ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            value === view.value ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
           }`}
         >
           {view.label}
@@ -98,8 +98,8 @@ export default function SettingsProperties() {
     <div>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-900">Properties</h2>
-          <p className="mt-0.5 text-sm text-gray-500">Archive a property to remove it from active operations, or restore one back.</p>
+          <h2 className="text-base font-semibold text-ink">Properties</h2>
+          <p className="mt-0.5 text-sm text-ink-secondary">Archive a property to remove it from active operations, or restore one back.</p>
         </div>
         <PropertyLifecycleFilter value={view} onChange={setView} />
       </div>
@@ -123,17 +123,17 @@ export default function SettingsProperties() {
       )}
 
       {status === "ready" && properties.length > 0 && (
-        <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+        <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
           {properties.map((property) => (
             <div
               key={property.id}
               className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
             >
               <div className="min-w-0">
-                <Link to={`/portfolio/${property.id}`} className="truncate text-sm font-medium text-gray-900 hover:underline">
+                <Link to={`/portfolio/${property.id}`} className="truncate text-sm font-medium text-ink hover:underline">
                   {property.name}
                 </Link>
-                <p className="truncate text-xs text-gray-500">{property.address || "No address on file"}</p>
+                <p className="truncate text-xs text-ink-secondary">{property.address || "No address on file"}</p>
               </div>
               {/* Below sm, this drops to its own trailing row (self-end) with
                   a bit of tap-target padding rather than squeezing against
@@ -144,7 +144,7 @@ export default function SettingsProperties() {
                 disabled={pendingId === property.id}
                 onClick={() => (view === "active" ? handleArchive(property) : handleRestore(property))}
                 className={`-mr-2 shrink-0 self-end rounded-md px-2 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 sm:mr-0 sm:self-auto sm:px-0 sm:py-0 ${
-                  view === "active" ? "text-gray-500 hover:text-red-600" : "text-gray-500 hover:text-gray-900"
+                  view === "active" ? "text-ink-secondary hover:text-red-600 dark:hover:text-red-400" : "text-ink-secondary hover:text-ink"
                 }`}
               >
                 {view === "active" ? "Archive Property" : "Restore Property"}

@@ -13,9 +13,9 @@ const APPEARANCE_OPTIONS = [
 
 function ReadOnlyField({ label, value }) {
   return (
-    <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="mt-1 text-sm text-gray-700">{value}</p>
+    <div className="min-w-36 max-w-full">
+      <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</p>
+      <p className="mt-1.5 break-words text-sm text-ink-secondary">{value}</p>
     </div>
   );
 }
@@ -69,39 +69,39 @@ export default function SettingsAccount() {
     <div className="space-y-8">
       <div>
         <div className="mb-6">
-          <h2 className="text-base font-semibold text-gray-900">Account</h2>
-          <p className="mt-0.5 text-sm text-gray-500">Your own profile and preferences.</p>
+          <h2 className="text-base font-semibold text-ink">Account</h2>
+          <p className="mt-0.5 text-sm text-ink-secondary">Your own profile and preferences.</p>
         </div>
 
-        <div className="max-w-sm rounded-2xl border border-gray-200 bg-white p-5">
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Profile</h3>
+        <div className="max-w-sm rounded-2xl border border-line bg-surface p-5">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted">Profile</h3>
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-900">Display name</label>
+              <label className="mb-1.5 block text-sm font-medium text-ink">Display name</label>
               <input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Your name"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
               />
             </div>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
             <div className="flex items-center gap-3 pt-1">
               <button
                 type="submit"
                 disabled={submitting}
-                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? "Saving..." : "Save Changes"}
               </button>
-              {saved && <span className="text-xs font-medium text-emerald-600">Saved</span>}
+              {saved && <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Saved</span>}
             </div>
           </form>
 
-          <div className="mt-5 grid grid-cols-1 gap-4 border-t border-gray-100 pt-5 sm:grid-cols-3">
+          <div className="mt-5 flex flex-wrap gap-x-8 gap-y-5 border-t border-line pt-5">
             <ReadOnlyField label="Email" value={user?.email} />
             <ReadOnlyField label="Role" value={roleLabel[role] || role} />
             <ReadOnlyField label="Organization" value={company?.name} />
@@ -111,17 +111,17 @@ export default function SettingsAccount() {
 
       <div>
         <div className="mb-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Appearance</h3>
-          <p className="mt-0.5 text-sm text-gray-500">Choose how PropertyOS looks on this device.</p>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Appearance</h3>
+          <p className="mt-0.5 text-sm text-ink-secondary">Choose how PropertyOS looks on this device.</p>
         </div>
-        <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+        <div className="inline-flex rounded-lg border border-line bg-surface-subtle p-1">
           {APPEARANCE_OPTIONS.map((option) => (
             <button
               key={option.value}
               type="button"
               onClick={() => setPreference(option.value)}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                preference === option.value ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                preference === option.value ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
               }`}
             >
               {option.label}

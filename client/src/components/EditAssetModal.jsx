@@ -90,13 +90,13 @@ export default function EditAssetModal({ asset, onClose, onUpdated }) {
 
   return (
     <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-gray-900/40 px-4 py-8 sm:items-center">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <h2 className="text-base font-semibold text-gray-900">Edit Asset</h2>
+      <div className="w-full max-w-md rounded-2xl bg-surface shadow-xl">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
+          <h2 className="text-base font-semibold text-ink">Edit Asset</h2>
           <button
             type="button"
             onClick={() => !submitting && onClose()}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-50 hover:text-gray-600"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition hover:bg-surface-subtle hover:text-ink-secondary"
             aria-label="Close"
           >
             <IconX className="h-4 w-4" />
@@ -105,35 +105,35 @@ export default function EditAssetModal({ asset, onClose, onUpdated }) {
 
         <form onSubmit={handleSubmit} className="space-y-4 px-5 py-5">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">Property</label>
-            <p className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm text-gray-500">{asset.property?.name}</p>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Property</label>
+            <p className="rounded-lg border border-line bg-surface-subtle px-3 py-2.5 text-sm text-ink-secondary">{asset.property?.name}</p>
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">Name</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Name</label>
             <input
               type="text"
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Rooftop HVAC Unit"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-base text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-base text-ink placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">Category</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Category</label>
             <input
               type="text"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               placeholder="e.g. HVAC, Plumbing, Appliance (optional)"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">Location</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Location</label>
             <SearchableSelect
               value={locationId}
               onChange={setLocationId}
@@ -143,7 +143,7 @@ export default function EditAssetModal({ asset, onClose, onUpdated }) {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">Status</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Status</label>
             <div className="flex gap-1.5">
               {STATUSES.map((s) => (
                 <button
@@ -151,7 +151,7 @@ export default function EditAssetModal({ asset, onClose, onUpdated }) {
                   type="button"
                   onClick={() => setStatus(s.value)}
                   className={`flex-1 rounded-lg px-2 py-2 text-sm font-medium transition ${
-                    status === s.value ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                    status === s.value ? "bg-accent text-accent-ink" : "bg-surface-subtle text-ink-secondary hover:bg-line"
                   }`}
                 >
                   {s.label}
@@ -161,12 +161,12 @@ export default function EditAssetModal({ asset, onClose, onUpdated }) {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">Install date</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Install date</label>
             <input
               type="date"
               value={installDate}
               onChange={(e) => setInstallDate(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
             />
           </div>
 
@@ -176,24 +176,24 @@ export default function EditAssetModal({ asset, onClose, onUpdated }) {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Notes (optional)"
               rows={2}
-              className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full resize-none rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-secondary placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
           <div className="flex gap-2 pt-1">
             <button
               type="button"
               onClick={() => !submitting && onClose()}
-              className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              className="flex-1 rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-ink-secondary transition hover:bg-surface-subtle"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? "Saving..." : "Save Changes"}
             </button>

@@ -184,10 +184,10 @@ export default function WorkOrders() {
       {status === "ready" && workOrders.length > 0 && (
         <div>
           {(urgentCount > 0 || overdueCount > 0) && (
-            <div className="mb-4 flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm">
-              <span className="font-medium text-gray-700">Needs attention:</span>
-              {urgentCount > 0 && <span className="text-red-600">{urgentCount} urgent</span>}
-              {overdueCount > 0 && <span className="text-amber-700">{overdueCount} overdue</span>}
+            <div className="mb-4 flex items-center gap-4 rounded-xl border border-line bg-surface-subtle px-4 py-2.5 text-sm">
+              <span className="font-medium text-ink-secondary">Needs attention:</span>
+              {urgentCount > 0 && <span className="text-red-600 dark:text-red-400">{urgentCount} urgent</span>}
+              {overdueCount > 0 && <span className="text-amber-700 dark:text-amber-400">{overdueCount} overdue</span>}
             </div>
           )}
 

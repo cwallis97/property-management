@@ -58,34 +58,34 @@ export default function SettingsOrganization() {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-base font-semibold text-gray-900">Organization</h2>
-        <p className="mt-0.5 text-sm text-gray-500">Basic details about your company.</p>
+        <h2 className="text-base font-semibold text-ink">Organization</h2>
+        <p className="mt-0.5 text-sm text-ink-secondary">Basic details about your company.</p>
       </div>
 
-      <div className="max-w-sm rounded-2xl border border-gray-200 bg-white p-5">
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Organization details</h3>
+      <div className="max-w-sm rounded-2xl border border-line bg-surface p-5">
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted">Organization details</h3>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">Company name</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Company name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
           <div className="flex items-center gap-3 pt-1">
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? "Saving..." : "Save Changes"}
             </button>
-            {saved && <span className="text-xs font-medium text-emerald-600">Saved</span>}
+            {saved && <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Saved</span>}
           </div>
         </form>
       </div>

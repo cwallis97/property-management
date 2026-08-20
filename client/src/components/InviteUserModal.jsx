@@ -65,13 +65,13 @@ export default function InviteUserModal({ onClose, onInvited }) {
 
   return (
     <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-gray-900/40 px-4 py-8 sm:items-center">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <h2 className="text-base font-semibold text-gray-900">{created ? "Invite created" : "Invite User"}</h2>
+      <div className="w-full max-w-md rounded-2xl bg-surface shadow-xl">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
+          <h2 className="text-base font-semibold text-ink">{created ? "Invite created" : "Invite User"}</h2>
           <button
             type="button"
             onClick={() => !submitting && onClose()}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-50 hover:text-gray-600"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition hover:bg-surface-subtle hover:text-ink-secondary"
             aria-label="Close"
           >
             <IconX className="h-4 w-4" />
@@ -81,19 +81,19 @@ export default function InviteUserModal({ onClose, onInvited }) {
         {!created ? (
           <form onSubmit={handleSubmit} className="space-y-4 px-5 py-5">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-900">Email</label>
+              <label className="mb-1.5 block text-sm font-medium text-ink">Email</label>
               <input
                 type="email"
                 autoFocus
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@example.com"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-base text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-base text-ink placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-900">Role</label>
+              <label className="mb-1.5 block text-sm font-medium text-ink">Role</label>
               <div className="flex gap-1.5">
                 {ROLES.map((r) => (
                   <button
@@ -101,7 +101,7 @@ export default function InviteUserModal({ onClose, onInvited }) {
                     type="button"
                     onClick={() => setRole(r.value)}
                     className={`flex-1 rounded-lg px-2 py-2 text-sm font-medium transition ${
-                      role === r.value ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                      role === r.value ? "bg-accent text-accent-ink" : "bg-surface-subtle text-ink-secondary hover:bg-line"
                     }`}
                   >
                     {r.label}
@@ -110,20 +110,20 @@ export default function InviteUserModal({ onClose, onInvited }) {
               </div>
             </div>
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
             <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => !submitting && onClose()}
-                className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                className="flex-1 rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-ink-secondary transition hover:bg-surface-subtle"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? "Creating..." : "Create Invite"}
               </button>
@@ -131,29 +131,29 @@ export default function InviteUserModal({ onClose, onInvited }) {
           </form>
         ) : (
           <div className="space-y-4 px-5 py-5">
-            <p className="text-sm text-gray-600">
-              Send this link to <span className="font-medium text-gray-900">{created.email}</span> — they'll join as{" "}
-              <span className="font-medium text-gray-900 capitalize">{created.role}</span>.
+            <p className="text-sm text-ink-secondary">
+              Send this link to <span className="font-medium text-ink">{created.email}</span> — they'll join as{" "}
+              <span className="font-medium text-ink capitalize">{created.role}</span>.
             </p>
 
-            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
-              <p className="min-w-0 flex-1 truncate font-mono text-xs text-gray-600">{inviteLink}</p>
+            <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-subtle px-3 py-2.5">
+              <p className="min-w-0 flex-1 truncate font-mono text-xs text-ink-secondary">{inviteLink}</p>
               <button
                 type="button"
                 onClick={handleCopy}
-                className="shrink-0 rounded-md bg-gray-900 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-gray-800"
+                className="shrink-0 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-ink transition hover:bg-accent-hover"
               >
                 {copied ? "Copied" : "Copy"}
               </button>
             </div>
 
-            <p className="text-xs text-gray-400">Expires {formatShortDate(created.expiresAt)}. This link is only shown once.</p>
+            <p className="text-xs text-ink-muted">Expires {formatShortDate(created.expiresAt)}. This link is only shown once.</p>
 
             <div className="flex justify-end pt-1">
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+                className="rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink transition hover:bg-accent-hover"
               >
                 Done
               </button>

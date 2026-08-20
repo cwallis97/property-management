@@ -24,14 +24,14 @@ const VIEWS = [
 // own value set, kept as its own small local control.
 function DocumentViewFilter({ value, onChange }) {
   return (
-    <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+    <div className="inline-flex rounded-lg border border-line bg-surface-subtle p-1">
       {VIEWS.map((view) => (
         <button
           key={view.value}
           type="button"
           onClick={() => onChange(view.value)}
           className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-            value === view.value ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            value === view.value ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
           }`}
         >
           {view.label}
@@ -178,7 +178,7 @@ export default function Documents() {
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-hover"
           >
             <IconPlus className="h-4 w-4" />
             Add Document

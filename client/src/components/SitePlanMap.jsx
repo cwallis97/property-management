@@ -130,27 +130,27 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
       popover: isSelected ? (
         <span
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-full left-1/2 z-10 mb-2 w-56 -translate-x-1/2 cursor-default rounded-xl border border-gray-200 bg-white p-3 text-left shadow-lg"
+          className="absolute bottom-full left-1/2 z-10 mb-2 w-56 -translate-x-1/2 cursor-default rounded-xl border border-line bg-surface p-3 text-left shadow-lg"
         >
-          <p className="truncate text-sm font-medium text-gray-900">{wo.title}</p>
+          <p className="truncate text-sm font-medium text-ink">{wo.title}</p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
             <span
               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                priorityBadge[wo.priority] || "bg-gray-50 text-gray-500"
+                priorityBadge[wo.priority] || "bg-surface-subtle text-ink-secondary"
               }`}
             >
               {wo.priority}
             </span>
             <span
               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                statusBadge[wo.status] || "bg-gray-50 text-gray-500"
+                statusBadge[wo.status] || "bg-surface-subtle text-ink-secondary"
               }`}
             >
               {statusLabel[wo.status] || wo.status}
             </span>
           </div>
           {(locationLabel || assetLabel) && (
-            <p className="mt-1.5 truncate text-xs text-gray-500">
+            <p className="mt-1.5 truncate text-xs text-ink-secondary">
               {locationLabel}
               {locationLabel && assetLabel && " · "}
               {assetLabel}
@@ -159,7 +159,7 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
           <Link
             to={`/portfolio/${propertyId}/work-orders/${wo.id}`}
             state={{ backLabel: "Map", backTo: `/portfolio/${propertyId}`, backTabState: { tab: "map" } }}
-            className="mt-2 block text-xs font-medium text-blue-600 hover:underline"
+            className="mt-2 block text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
           >
             View Work Order →
           </Link>
@@ -182,9 +182,9 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
 
   if (sitePlanStatus === "none") {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center">
-        <h2 className="text-base font-semibold text-gray-900">Set Up Property Map</h2>
-        <p className="mt-2 max-w-md text-sm text-gray-500">
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line-strong bg-surface px-6 py-16 text-center">
+        <h2 className="text-base font-semibold text-ink">Set Up Property Map</h2>
+        <p className="mt-2 max-w-md text-sm text-ink-secondary">
           {canUploadSitePlan
             ? "Upload the overhead site plan, property map, or aerial image your team already uses."
             : "No site plan has been uploaded for this property yet."}
@@ -192,7 +192,7 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
 
         {canUploadSitePlan && (
           <>
-            <p className="mt-1 text-xs text-gray-400">Accepted: PDF, PNG, JPG</p>
+            <p className="mt-1 text-xs text-ink-muted">Accepted: PDF, PNG, JPG</p>
             <input
               ref={fileInputRef}
               type="file"
@@ -204,11 +204,11 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
               type="button"
               disabled={uploading}
               onClick={() => fileInputRef.current?.click()}
-              className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {uploading ? "Uploading…" : "Upload Site Plan"}
             </button>
-            {uploadError && <p className="mt-3 text-sm text-red-600">{uploadError}</p>}
+            {uploadError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{uploadError}</p>}
           </>
         )}
       </div>
@@ -216,7 +216,7 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+    <div className="rounded-2xl border border-line bg-surface p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         {canCreateWorkOrder ? (
           <button
@@ -227,7 +227,7 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
               setSelectedWorkOrderId(null);
             }}
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-              reportIssueMode ? "bg-gray-900 text-white" : "border border-gray-200 text-gray-700 hover:bg-gray-50"
+              reportIssueMode ? "bg-accent text-accent-ink" : "border border-line text-ink-secondary hover:bg-surface-subtle"
             }`}
           >
             <IconPlus className="h-4 w-4" />
@@ -250,7 +250,7 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
               type="button"
               disabled={uploading}
               onClick={() => replaceInputRef.current?.click()}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink-secondary transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
             >
               {uploading ? "Uploading…" : "Replace site plan"}
             </button>
@@ -258,7 +258,7 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
         )}
       </div>
 
-      {uploadError && <p className="mb-3 text-sm text-red-600">{uploadError}</p>}
+      {uploadError && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{uploadError}</p>}
 
       <SitePlanCanvas
         fileStatus={fileStatus}

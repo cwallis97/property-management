@@ -14,13 +14,13 @@ export default function Breadcrumb({ items }) {
         const isLast = index === items.length - 1;
         return (
           <span key={index} className="flex items-center gap-1.5">
-            {index > 0 && <span className="text-gray-300">›</span>}
+            {index > 0 && <span className="text-ink-muted">›</span>}
             {item.to && !isLast ? (
-              <Link to={item.to} state={item.state} className="text-gray-500 transition hover:text-gray-900">
+              <Link to={item.to} state={item.state} className="text-ink-secondary transition hover:text-ink">
                 {item.label}
               </Link>
             ) : (
-              <span className={isLast ? "font-medium text-gray-900" : "text-gray-500"}>{item.label}</span>
+              <span className={isLast ? "font-medium text-ink" : "text-ink-secondary"}>{item.label}</span>
             )}
           </span>
         );

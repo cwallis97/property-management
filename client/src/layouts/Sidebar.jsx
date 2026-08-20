@@ -33,8 +33,8 @@ const linkClasses = ({ isActive }) =>
   [
     "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition",
     isActive
-      ? "bg-gray-100 text-gray-900"
-      : "text-gray-500 hover:bg-gray-50 hover:text-gray-900",
+      ? "bg-surface-subtle text-ink"
+      : "text-ink-secondary hover:bg-surface-subtle hover:text-ink",
   ].join(" ");
 
 // Compact, always-visible "which Property am I operating in" control, sitting
@@ -114,12 +114,12 @@ export default function Sidebar() {
   const { hasCapability } = useAuth();
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-gray-200 bg-white">
+    <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-line bg-surface">
       <div className="flex h-16 items-center gap-2.5 px-6">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-900 text-xs font-bold text-white">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent text-xs font-bold text-accent-ink">
           P
         </span>
-        <span className="text-[15px] font-semibold tracking-tight text-gray-900">
+        <span className="text-[15px] font-semibold tracking-tight text-ink">
           PropertyOS
         </span>
       </div>
@@ -136,7 +136,7 @@ export default function Sidebar() {
       </nav>
 
       {hasCapability(CAPABILITIES.SETTINGS_ACCESS) && (
-        <div className="border-t border-gray-100 px-3 py-3">
+        <div className="border-t border-line px-3 py-3">
           <NavLink to="/settings" className={linkClasses}>
             <IconSettings className="h-[18px] w-[18px]" />
             Settings

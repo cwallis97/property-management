@@ -8,7 +8,7 @@ export default function AppShell() {
   return (
     <AuthProvider>
       <PropertyScopeProvider>
-        <div className="flex h-screen overflow-hidden bg-gray-50">
+        <div className="flex h-screen overflow-hidden bg-page">
           <Sidebar />
           <div className="flex min-w-0 flex-1 flex-col">
             <Header />

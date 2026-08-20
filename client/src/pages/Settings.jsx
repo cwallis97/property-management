@@ -56,7 +56,7 @@ export default function Settings() {
             gives it more room before committing to that layout.
           */}
           <nav className="mb-6 -mx-1 overflow-x-auto px-1 lg:hidden">
-            <div className="flex gap-5 whitespace-nowrap border-b border-gray-200">
+            <div className="flex gap-5 whitespace-nowrap border-b border-line">
               {SECTIONS.map((section) => (
                 <button
                   key={section.key}
@@ -66,10 +66,10 @@ export default function Settings() {
                   title={section.enabled ? undefined : "You don't have access to this"}
                   className={`shrink-0 border-b-2 pb-3 text-sm font-medium transition ${
                     !section.enabled
-                      ? "cursor-not-allowed border-transparent text-gray-300"
+                      ? "cursor-not-allowed border-transparent text-ink-muted"
                       : effectiveSection === section.key
-                      ? "border-gray-900 text-gray-900"
-                      : "border-transparent text-gray-500 hover:text-gray-700"
+                      ? "border-accent text-ink"
+                      : "border-transparent text-ink-secondary hover:text-ink-secondary"
                   }`}
                 >
                   {section.label}
@@ -89,10 +89,10 @@ export default function Settings() {
                   title={section.enabled ? undefined : "You don't have access to this"}
                   className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium transition ${
                     !section.enabled
-                      ? "cursor-not-allowed text-gray-300"
+                      ? "cursor-not-allowed text-ink-muted"
                       : effectiveSection === section.key
-                      ? "bg-gray-100 text-gray-900"
-                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                      ? "bg-surface-subtle text-ink"
+                      : "text-ink-secondary hover:bg-surface-subtle hover:text-ink"
                   }`}
                 >
                   {section.label}

@@ -109,13 +109,13 @@ export default function SettingsUsers() {
     <div>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-900">Users & Roles</h2>
-          <p className="mt-0.5 text-sm text-gray-500">Manage what each member of your company can do.</p>
+          <h2 className="text-base font-semibold text-ink">Users & Roles</h2>
+          <p className="mt-0.5 text-sm text-ink-secondary">Manage what each member of your company can do.</p>
         </div>
         <button
           type="button"
           onClick={() => setShowInviteModal(true)}
-          className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800 sm:self-auto"
+          className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-hover sm:self-auto"
         >
           <IconPlus className="h-4 w-4" />
           Invite User
@@ -133,7 +133,7 @@ export default function SettingsUsers() {
       )}
 
       {status === "ready" && members.length > 0 && (
-        <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+        <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
           {members.map((member) => {
             const isOwner = member.role === "owner";
             const isSelf = member.userId === user?.id;
@@ -145,11 +145,11 @@ export default function SettingsUsers() {
                 className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-gray-900">
+                  <p className="truncate text-sm font-medium text-ink">
                     {member.name}
-                    {isSelf && <span className="ml-1.5 text-xs font-normal text-gray-400">(you)</span>}
+                    {isSelf && <span className="ml-1.5 text-xs font-normal text-ink-muted">(you)</span>}
                   </p>
-                  <p className="truncate text-xs text-gray-500">{member.email}</p>
+                  <p className="truncate text-xs text-ink-secondary">{member.email}</p>
                 </div>
 
                 <div className="w-full shrink-0 sm:w-48">
@@ -178,16 +178,16 @@ export default function SettingsUsers() {
 
       {invitesStatus === "ready" && invites.length > 0 && (
         <div className="mt-8">
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Pending Invitations</h3>
-          <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted">Pending Invitations</h3>
+          <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
             {invites.map((invite) => (
               <div
                 key={invite.id}
                 className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-gray-900">{invite.email}</p>
-                  <p className="truncate text-xs text-gray-500">
+                  <p className="truncate text-sm font-medium text-ink">{invite.email}</p>
+                  <p className="truncate text-xs text-ink-secondary">
                     {roleLabel[invite.role] || invite.role}
                     {invite.status === "expired" ? " · Expired" : ` · Expires ${formatShortDate(invite.expiresAt)}`}
                   </p>
@@ -196,7 +196,7 @@ export default function SettingsUsers() {
                   type="button"
                   disabled={revokingId === invite.id}
                   onClick={() => handleRevoke(invite)}
-                  className="self-end shrink-0 rounded-md px-2 py-1.5 text-xs font-medium text-gray-500 transition hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto sm:px-0 sm:py-0"
+                  className="self-end shrink-0 rounded-md px-2 py-1.5 text-xs font-medium text-ink-secondary transition hover:text-red-600 dark:hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto sm:px-0 sm:py-0"
                 >
                   Cancel
                 </button>

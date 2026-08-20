@@ -66,7 +66,7 @@ function formatNoteTimestamp(createdAt) {
 
 function BackLink({ to, state, label }) {
   return (
-    <Link to={to} state={state} className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition hover:text-gray-900">
+    <Link to={to} state={state} className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-ink-secondary transition hover:text-ink">
       <IconArrowLeft className="h-4 w-4" />
       Back to {label}
     </Link>
@@ -76,7 +76,7 @@ function BackLink({ to, state, label }) {
 function SidebarSection({ title, children }) {
   return (
     <div>
-      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">{title}</h2>
+      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">{title}</h2>
       {children}
     </div>
   );
@@ -457,26 +457,26 @@ export default function WorkOrderDetail() {
 
       {/* SITUATION HEADER — what is wrong, where, how serious, what state */}
       <div className="mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight text-gray-900">{workOrder.title}</h1>
-        <p className="mt-1.5 text-base text-gray-500">{locationLabel ?? "Property-level"}</p>
+        <h1 className="text-3xl font-semibold tracking-tight text-ink">{workOrder.title}</h1>
+        <p className="mt-1.5 text-base text-ink-secondary">{locationLabel ?? "Property-level"}</p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span
             className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-              priorityBadge[workOrder.priority] || "bg-gray-50 text-gray-500"
+              priorityBadge[workOrder.priority] || "bg-surface-subtle text-ink-secondary"
             }`}
           >
             {workOrder.priority}
           </span>
           <span
             className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-              statusBadge[workOrder.status] || "bg-gray-50 text-gray-500"
+              statusBadge[workOrder.status] || "bg-surface-subtle text-ink-secondary"
             }`}
           >
             {statusLabel[workOrder.status] || workOrder.status}
           </span>
           {overdue && (
-            <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-red-600 ring-1 ring-inset ring-red-100">
+            <span className="rounded-full bg-red-50 dark:bg-red-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-red-600 dark:text-red-400 ring-1 ring-inset ring-red-100 dark:ring-red-500/20">
               Overdue
             </span>
           )}
@@ -486,10 +486,10 @@ export default function WorkOrderDetail() {
       {/* ATTENTION — only for work orders that actually need it, derived
           entirely from real data (priority + dueDate), never decorative. */}
       {needsAttentionNow && (
-        <div className="mb-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Attention</p>
-          <p className="mt-1 text-sm font-medium text-red-900">{attentionParts.join(" · ")}</p>
-          <p className="text-xs text-red-700/80">
+        <div className="mb-6 rounded-xl border border-red-100 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-400">Attention</p>
+          <p className="mt-1 text-sm font-medium text-red-900 dark:text-red-300">{attentionParts.join(" · ")}</p>
+          <p className="text-xs text-red-700/80 dark:text-red-400/80">
             Reported {reportedAgo} ago{workOrder.dueDate ? ` · Due ${formatDueDate(workOrder.dueDate)}` : ""}
           </p>
         </div>
@@ -498,14 +498,14 @@ export default function WorkOrderDetail() {
       {/* OPERATIONAL WORKSPACE — main content wider than the context/action sidebar */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6">
+          <div className="rounded-2xl border border-line bg-surface p-6">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Description</h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Description</h2>
               {!editingDescription && canEditWorkOrder && (
                 <button
                   type="button"
                   onClick={startEditingDescription}
-                  className="text-xs font-medium text-gray-500 transition hover:text-gray-900"
+                  className="text-xs font-medium text-ink-secondary transition hover:text-ink"
                 >
                   Edit
                 </button>
@@ -513,8 +513,8 @@ export default function WorkOrderDetail() {
             </div>
 
             {!editingDescription ? (
-              <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed text-gray-700">
-                {workOrder.description || <span className="text-gray-400">No description provided</span>}
+              <p className="mt-2 whitespace-pre-wrap text-base leading-relaxed text-ink-secondary">
+                {workOrder.description || <span className="text-ink-muted">No description provided</span>}
               </p>
             ) : (
               <div className="mt-2">
@@ -524,13 +524,13 @@ export default function WorkOrderDetail() {
                   onChange={(e) => setDescriptionDraft(e.target.value)}
                   placeholder="Describe the issue or work..."
                   rows={4}
-                  className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full resize-none rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-secondary placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    {descriptionSave.phase === "saving" && <span className="text-xs text-gray-400">Saving…</span>}
+                    {descriptionSave.phase === "saving" && <span className="text-xs text-ink-muted">Saving…</span>}
                     {descriptionSave.phase === "saved" && (
-                      <span className="text-xs font-medium text-emerald-600">Saved</span>
+                      <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Saved</span>
                     )}
                   </div>
                   <div className="flex gap-2">
@@ -538,7 +538,7 @@ export default function WorkOrderDetail() {
                       type="button"
                       disabled={descriptionSave.phase === "saving"}
                       onClick={cancelEditingDescription}
-                      className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-500 transition hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-secondary transition hover:text-ink-secondary disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Cancel
                     </button>
@@ -546,14 +546,14 @@ export default function WorkOrderDetail() {
                       type="button"
                       disabled={descriptionSave.phase === "saving"}
                       onClick={saveDescription}
-                      className="rounded-lg bg-gray-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {descriptionSave.phase === "saving" ? "Saving…" : "Save"}
                     </button>
                   </div>
                 </div>
                 {descriptionSave.phase === "error" && (
-                  <p className="mt-1.5 text-xs text-red-600">{descriptionSave.error}</p>
+                  <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{descriptionSave.error}</p>
                 )}
               </div>
             )}
@@ -570,24 +570,24 @@ export default function WorkOrderDetail() {
               history you add to, never edit, while Description is a single
               current snapshot you keep up to date. */}
           <div>
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Updates</h2>
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted">Updates</h2>
 
-            {notesStatus === "loading" && <p className="text-sm text-gray-400">Loading updates…</p>}
+            {notesStatus === "loading" && <p className="text-sm text-ink-muted">Loading updates…</p>}
 
             {notesStatus === "error" && (
-              <p className="mb-3 text-sm text-red-600">Couldn't load updates. Please try again.</p>
+              <p className="mb-3 text-sm text-red-600 dark:text-red-400">Couldn't load updates. Please try again.</p>
             )}
 
             {notesStatus === "ready" && notes.length > 0 && (
               <div className="space-y-4">
                 {notes.map((note) => (
-                  <div key={note.id} className="border-t border-gray-100 pt-3 first:border-t-0 first:pt-0">
-                    <p className="text-xs text-gray-500">
-                      <span className="font-medium text-gray-700">{note.author?.name ?? "Unknown"}</span>
+                  <div key={note.id} className="border-t border-line pt-3 first:border-t-0 first:pt-0">
+                    <p className="text-xs text-ink-secondary">
+                      <span className="font-medium text-ink-secondary">{note.author?.name ?? "Unknown"}</span>
                       {" · "}
                       {formatNoteTimestamp(note.createdAt)}
                     </p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{note.body}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink-secondary">{note.body}</p>
                   </div>
                 ))}
               </div>
@@ -600,14 +600,14 @@ export default function WorkOrderDetail() {
                   onChange={(e) => setComposerValue(e.target.value)}
                   placeholder="Add update..."
                   rows={2}
-                  className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  className="w-full resize-none rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-secondary placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
                 />
-                {noteError && <p className="mt-1.5 text-sm text-red-600">{noteError}</p>}
+                {noteError && <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{noteError}</p>}
                 <div className="mt-2 flex justify-end">
                   <button
                     type="submit"
                     disabled={submittingNote || !composerValue.trim()}
-                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {submittingNote ? "Saving…" : "Add Update"}
                   </button>
@@ -623,45 +623,45 @@ export default function WorkOrderDetail() {
               real entries, never a separately-entered number. */}
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Costs</h2>
-              <span className="text-sm font-semibold text-gray-900">{formatMoney(workOrder.totalCost ?? 0)}</span>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Costs</h2>
+              <span className="text-sm font-semibold text-ink">{formatMoney(workOrder.totalCost ?? 0)}</span>
             </div>
 
-            {costsStatus === "loading" && <p className="text-sm text-gray-400">Loading costs…</p>}
-            {costsStatus === "error" && <p className="mb-3 text-sm text-red-600">Couldn't load costs. Please try again.</p>}
+            {costsStatus === "loading" && <p className="text-sm text-ink-muted">Loading costs…</p>}
+            {costsStatus === "error" && <p className="mb-3 text-sm text-red-600 dark:text-red-400">Couldn't load costs. Please try again.</p>}
 
             {costsStatus === "ready" && costs.length > 0 && (
-              <div className="mb-3 divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+              <div className="mb-3 divide-y divide-line rounded-2xl border border-line bg-surface">
                 {costs.map((entry) => (
                   <div key={entry.id} className="flex items-start justify-between gap-4 px-4 py-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900">{costTypeLabel[entry.type] || entry.type}</p>
-                      {entry.note && <p className="text-xs text-gray-500">{entry.note}</p>}
-                      <p className="text-xs text-gray-400">
+                      <p className="text-sm font-medium text-ink">{costTypeLabel[entry.type] || entry.type}</p>
+                      {entry.note && <p className="text-xs text-ink-secondary">{entry.note}</p>}
+                      <p className="text-xs text-ink-muted">
                         {formatDueDate(entry.costDate)} · {entry.createdBy?.name ?? "Unknown"}
                         {entry.vendor && ` · ${entry.vendor.name}`}
                       </p>
                     </div>
-                    <span className="shrink-0 text-sm font-medium text-gray-900">{formatMoney(entry.amount)}</span>
+                    <span className="shrink-0 text-sm font-medium text-ink">{formatMoney(entry.amount)}</span>
                   </div>
                 ))}
               </div>
             )}
 
             {costsStatus === "ready" && costs.length === 0 && !costFormOpen && (
-              <p className="mb-3 text-sm text-gray-400">No costs recorded yet.</p>
+              <p className="mb-3 text-sm text-ink-muted">No costs recorded yet.</p>
             )}
 
             {!canAddCost ? null : !costFormOpen ? (
               <button
                 type="button"
                 onClick={() => setCostFormOpen(true)}
-                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink-secondary transition hover:bg-surface-subtle"
               >
                 Add Cost
               </button>
             ) : (
-              <form onSubmit={handleAddCost} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <form onSubmit={handleAddCost} className="rounded-xl border border-line bg-surface-subtle p-4">
                 <div className="flex flex-wrap gap-1.5">
                   {COST_TYPES.map((t) => (
                     <button
@@ -678,7 +678,7 @@ export default function WorkOrderDetail() {
                         }
                       }}
                       className={`rounded-lg px-2.5 py-1.5 text-sm font-medium transition ${
-                        costType === t.value ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-100"
+                        costType === t.value ? "bg-accent text-accent-ink" : "bg-surface text-ink-secondary hover:bg-surface-subtle"
                       }`}
                     >
                       {t.label}
@@ -704,13 +704,13 @@ export default function WorkOrderDetail() {
                     value={costAmount}
                     onChange={(e) => setCostAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    className="w-28 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
                   />
                   <input
                     type="date"
                     value={costDate}
                     onChange={(e) => setCostDate(e.target.value)}
-                    className="w-40 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    className="w-40 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
                   />
                 </div>
                 <div className="mt-2">
@@ -719,10 +719,10 @@ export default function WorkOrderDetail() {
                     value={costNote}
                     onChange={(e) => setCostNote(e.target.value)}
                     placeholder="Note (optional)"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-secondary placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
                   />
                 </div>
-                {costError && <p className="mt-1.5 text-sm text-red-600">{costError}</p>}
+                {costError && <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{costError}</p>}
                 <div className="mt-3 flex justify-end gap-2">
                   <button
                     type="button"
@@ -730,14 +730,14 @@ export default function WorkOrderDetail() {
                       setCostFormOpen(false);
                       setCostError(null);
                     }}
-                    className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-500 transition hover:text-gray-700"
+                    className="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-secondary transition hover:text-ink-secondary"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submittingCost}
-                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {submittingCost ? "Saving…" : "Save Cost"}
                   </button>
@@ -753,7 +753,7 @@ export default function WorkOrderDetail() {
           <SidebarSection title="Status">
             {!isCompleted && canEditWorkOrder ? (
               <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex flex-wrap rounded-lg border border-gray-200 bg-gray-50 p-1">
+                <div className="inline-flex flex-wrap rounded-lg border border-line bg-surface-subtle p-1">
                   {ACTIVE_WORK_ORDER_STATUSES.map((s) => (
                     <button
                       key={s}
@@ -761,15 +761,15 @@ export default function WorkOrderDetail() {
                       disabled={statusSave.phase === "saving" || actionSave.phase === "saving"}
                       onClick={() => applyStatus(s)}
                       className={`rounded-md px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                        workOrder.status === s ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                        workOrder.status === s ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
                       }`}
                     >
                       {statusLabel[s]}
                     </button>
                   ))}
                 </div>
-                {statusSave.phase === "saving" && <span className="text-xs text-gray-400">Saving…</span>}
-                {statusSave.phase === "saved" && <span className="text-xs font-medium text-emerald-600">Saved</span>}
+                {statusSave.phase === "saving" && <span className="text-xs text-ink-muted">Saving…</span>}
+                {statusSave.phase === "saved" && <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Saved</span>}
               </div>
             ) : isCompleted ? (
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-inset ring-emerald-100">
@@ -778,17 +778,17 @@ export default function WorkOrderDetail() {
             ) : (
               <span
                 className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                  statusBadge[workOrder.status] || "bg-gray-50 text-gray-500"
+                  statusBadge[workOrder.status] || "bg-surface-subtle text-ink-secondary"
                 }`}
               >
                 {statusLabel[workOrder.status] || workOrder.status}
               </span>
             )}
-            {statusSave.phase === "error" && <p className="mt-1.5 text-xs text-red-600">{statusSave.error}</p>}
+            {statusSave.phase === "error" && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{statusSave.error}</p>}
           </SidebarSection>
 
           <SidebarSection title="Location">
-            <p className="text-sm text-gray-900">{leafLocationName ?? "Property-level"}</p>
+            <p className="text-sm text-ink">{leafLocationName ?? "Property-level"}</p>
           </SidebarSection>
 
           <SidebarSection title="Asset">
@@ -805,12 +805,12 @@ export default function WorkOrderDetail() {
                   backTo: `/portfolio/${propertyId}/work-orders/${workOrderId}`,
                   backTabState: { backLabel, backTo, backTabState },
                 }}
-                className="text-sm font-medium text-blue-600 hover:underline"
+                className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
               >
                 {assetLabel}
               </Link>
             ) : (
-              <p className="text-sm text-gray-400">No asset linked</p>
+              <p className="text-sm text-ink-muted">No asset linked</p>
             )}
           </SidebarSection>
 
@@ -823,8 +823,8 @@ export default function WorkOrderDetail() {
               disabled={!canEditWorkOrder || vendorSave.phase === "saving"}
             />
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              {vendorSave.phase === "saving" && <span className="text-xs text-gray-400">Saving…</span>}
-              {vendorSave.phase === "saved" && <span className="text-xs font-medium text-emerald-600">Saved</span>}
+              {vendorSave.phase === "saving" && <span className="text-xs text-ink-muted">Saving…</span>}
+              {vendorSave.phase === "saved" && <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Saved</span>}
               {assignedVendor && (
                 <Link
                   to={`/vendors/${assignedVendor.id}`}
@@ -836,28 +836,28 @@ export default function WorkOrderDetail() {
                     backTo: `/portfolio/${propertyId}/work-orders/${workOrderId}`,
                     backTabState: { backLabel, backTo, backTabState },
                   }}
-                  className="text-xs font-medium text-blue-600 hover:underline"
+                  className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
                 >
                   View Vendor →
                 </Link>
               )}
             </div>
-            {vendorSave.phase === "error" && <p className="mt-1.5 text-xs text-red-600">{vendorSave.error}</p>}
+            {vendorSave.phase === "error" && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{vendorSave.error}</p>}
           </SidebarSection>
 
           {(workOrder.category || workOrder.workType) && (
             <SidebarSection title="Category">
-              <p className="text-sm text-gray-900">{categoryLabel[workOrder.category] || workOrder.category}</p>
-              {workOrder.workType && <p className="text-xs text-gray-500">{workOrder.workType.label}</p>}
+              <p className="text-sm text-ink">{categoryLabel[workOrder.category] || workOrder.category}</p>
+              {workOrder.workType && <p className="text-xs text-ink-secondary">{workOrder.workType.label}</p>}
             </SidebarSection>
           )}
 
           <SidebarSection title="Timing">
-            <p className="text-sm text-gray-700">Reported {reportedAgo} ago</p>
-            <p className={`text-sm ${overdue ? "font-medium text-red-600" : "text-gray-700"}`}>
+            <p className="text-sm text-ink-secondary">Reported {reportedAgo} ago</p>
+            <p className={`text-sm ${overdue ? "font-medium text-red-600 dark:text-red-400" : "text-ink-secondary"}`}>
               {workOrder.dueDate ? `Due ${formatDueDate(workOrder.dueDate)}` : "No due date"}
             </p>
-            {overdue && <p className="text-xs font-medium text-red-600">Overdue</p>}
+            {overdue && <p className="text-xs font-medium text-red-600 dark:text-red-400">Overdue</p>}
           </SidebarSection>
 
           {(canEditWorkOrder || isCompleted) && (
@@ -873,20 +873,20 @@ export default function WorkOrderDetail() {
               </button>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm text-gray-500">Resolved in {resolutionAge}</p>
+                <p className="text-sm text-ink-secondary">Resolved in {resolutionAge}</p>
                 {canEditWorkOrder && (
                 <button
                   type="button"
                   disabled={actionSave.phase === "saving" || statusSave.phase === "saving"}
                   onClick={() => applyAction("open")}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink-secondary transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {actionSave.phase === "saving" ? "Saving…" : "Reopen"}
                 </button>
                 )}
               </div>
             )}
-            {actionSave.phase === "error" && <p className="mt-1.5 text-xs text-red-600">{actionSave.error}</p>}
+            {actionSave.phase === "error" && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{actionSave.error}</p>}
           </SidebarSection>
           )}
         </div>

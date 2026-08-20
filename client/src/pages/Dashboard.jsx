@@ -20,8 +20,8 @@ const ATTENTION_LIMIT = 8;
 function PulseStat({ label, value, accent }) {
   return (
     <div className="px-4 py-3.5 sm:px-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
-      <p className={`mt-1 text-xl font-semibold ${accent ? "text-red-600" : "text-gray-900"}`}>{value}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</p>
+      <p className={`mt-1 text-xl font-semibold ${accent ? "text-red-600 dark:text-red-400" : "text-ink"}`}>{value}</p>
     </div>
   );
 }
@@ -184,9 +184,9 @@ export default function Dashboard() {
         <div className="space-y-10">
           <div>
             <div className="mb-3 flex items-center gap-2.5">
-              <h2 className="text-lg font-semibold tracking-tight text-gray-900">Needs Attention</h2>
+              <h2 className="text-lg font-semibold tracking-tight text-ink">Needs Attention</h2>
               {attentionRows.length > 0 && (
-                <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-600 ring-1 ring-inset ring-red-100">
+                <span className="rounded-full bg-red-50 dark:bg-red-500/10 px-2 py-0.5 text-xs font-semibold text-red-600 dark:text-red-400 ring-1 ring-inset ring-red-100 dark:ring-red-500/20">
                   {attentionRows.length}
                 </span>
               )}
@@ -200,40 +200,40 @@ export default function Dashboard() {
               />
             ) : (
               <>
-                <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+                <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
                   {visibleAttentionRows.map((row) => (
                     <Link
                       key={row.id}
                       to={`/portfolio/${row.propertyId}/work-orders/${row.id}`}
                       state={{ backLabel: "Dashboard", backTo: "/dashboard" }}
-                      className="block px-5 py-4 transition hover:bg-gray-50"
+                      className="block px-5 py-4 transition hover:bg-surface-subtle"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900">{row.title}</p>
-                          <p className="truncate text-xs text-gray-500">
+                          <p className="truncate text-sm font-medium text-ink">{row.title}</p>
+                          <p className="truncate text-xs text-ink-secondary">
                             {row.propertyName}
                             {row.locationLabel && ` · ${row.locationLabel}`}
                             {row.assetLabel && ` · ${row.assetLabel}`}
                           </p>
-                          <p className="mt-1 text-xs text-gray-400">Reported {row.ageLabel} ago</p>
+                          <p className="mt-1 text-xs text-ink-muted">Reported {row.ageLabel} ago</p>
                         </div>
                         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                           <span
                             className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                              priorityBadge[row.priority] || "bg-gray-50 text-gray-500"
+                              priorityBadge[row.priority] || "bg-surface-subtle text-ink-secondary"
                             }`}
                           >
                             {row.priority}
                           </span>
                           {row.overdue && (
-                            <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-600 ring-1 ring-inset ring-red-100">
+                            <span className="rounded-full bg-red-50 dark:bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-600 dark:text-red-400 ring-1 ring-inset ring-red-100 dark:ring-red-500/20">
                               Overdue
                             </span>
                           )}
                           <span
                             className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                              statusBadge[row.status] || "bg-gray-50 text-gray-500"
+                              statusBadge[row.status] || "bg-surface-subtle text-ink-secondary"
                             }`}
                           >
                             {statusLabel[row.status] || row.status}
@@ -244,7 +244,7 @@ export default function Dashboard() {
                   ))}
                 </div>
                 {hiddenAttentionCount > 0 && (
-                  <p className="mt-2 text-xs text-gray-400">
+                  <p className="mt-2 text-xs text-ink-muted">
                     +{hiddenAttentionCount} more across your portfolio — open a property to see all its Work Orders.
                   </p>
                 )}
@@ -253,8 +253,8 @@ export default function Dashboard() {
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Portfolio Pulse</p>
-            <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white sm:grid-cols-5 sm:divide-y-0">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Portfolio Pulse</p>
+            <div className="grid grid-cols-2 divide-x divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface sm:grid-cols-5 sm:divide-y-0">
               <PulseStat label="Active Work Orders" value={rows.length} />
               <PulseStat label="Needs Attention" value={attentionRows.length} accent={attentionRows.length > 0} />
               <PulseStat label="Overdue" value={overdueCount} accent={overdueCount > 0} />
@@ -264,32 +264,32 @@ export default function Dashboard() {
           </div>
 
           <div>
-            <h2 className="mb-1 text-base font-semibold text-gray-900">Property Pressure</h2>
-            <p className="mb-3 text-xs text-gray-400">Open a property to investigate further.</p>
-            <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+            <h2 className="mb-1 text-base font-semibold text-ink">Property Pressure</h2>
+            <p className="mb-3 text-xs text-ink-muted">Open a property to investigate further.</p>
+            <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
               {propertyPressure.map((property) => (
                 <Link
                   key={property.id}
                   to={`/portfolio/${property.id}`}
-                  className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-5 py-4 transition hover:bg-gray-50 ${
+                  className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-5 py-4 transition hover:bg-surface-subtle ${
                     property.urgentAndOverdueCount > 0 ? "border-l-2 border-l-red-400" : ""
                   }`}
                 >
-                  <p className="truncate text-sm font-medium text-gray-900">{property.name}</p>
+                  <p className="truncate text-sm font-medium text-ink">{property.name}</p>
                   <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                     {property.activeCount > 0 ? (
-                      <span className="text-gray-500">{property.activeCount} active</span>
+                      <span className="text-ink-secondary">{property.activeCount} active</span>
                     ) : (
-                      <span className="text-gray-400">No active Work Orders</span>
+                      <span className="text-ink-muted">No active Work Orders</span>
                     )}
                     {property.urgentCount > 0 && (
-                      <span className="font-medium text-red-600">{property.urgentCount} urgent</span>
+                      <span className="font-medium text-red-600 dark:text-red-400">{property.urgentCount} urgent</span>
                     )}
                     {property.overdueCount > 0 && (
-                      <span className="font-medium text-amber-700">{property.overdueCount} overdue</span>
+                      <span className="font-medium text-amber-700 dark:text-amber-400">{property.overdueCount} overdue</span>
                     )}
                     {property.criticalAssetCount > 0 && (
-                      <span className="font-medium text-red-600">
+                      <span className="font-medium text-red-600 dark:text-red-400">
                         {property.criticalAssetCount} critical asset{property.criticalAssetCount !== 1 ? "s" : ""}
                       </span>
                     )}

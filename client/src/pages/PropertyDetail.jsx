@@ -41,8 +41,8 @@ function OverviewStat({ label, value, accent, onClick }) {
   const isActionable = typeof onClick === "function" && Number(value) > 0;
   const content = (
     <>
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
-      <p className={`mt-1 text-xl font-semibold ${accent ? "text-red-600" : "text-gray-900"}`}>{value}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</p>
+      <p className={`mt-1 text-xl font-semibold ${accent ? "text-red-600 dark:text-red-400" : "text-ink"}`}>{value}</p>
     </>
   );
 
@@ -54,7 +54,7 @@ function OverviewStat({ label, value, accent, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="block w-full cursor-pointer px-4 py-3.5 text-left transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gray-300 sm:px-5"
+      className="block w-full cursor-pointer px-4 py-3.5 text-left transition hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-line-strong sm:px-5"
     >
       {content}
     </button>
@@ -388,15 +388,15 @@ export default function PropertyDetail() {
       />
 
       {property.status === "archived" && (
-        <p className="mb-6 flex items-center gap-2 text-sm text-gray-500">
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-gray-500 ring-1 ring-inset ring-gray-200">
+        <p className="mb-6 flex items-center gap-2 text-sm text-ink-secondary">
+          <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-ink-secondary ring-1 ring-inset ring-line">
             Archived
           </span>
           Removed from active operations. Locations, Assets, Work Orders, Documents, and history remain fully preserved. Manage this from Settings → Properties.
         </p>
       )}
 
-      <div className="mb-6 flex gap-6 border-b border-gray-200">
+      <div className="mb-6 flex gap-6 border-b border-line">
         {TABS.map((tab) => (
           <button
             key={tab.key}
@@ -410,8 +410,8 @@ export default function PropertyDetail() {
             }}
             className={`border-b-2 pb-3 text-sm font-medium transition ${
               activeTab === tab.key
-                ? "border-gray-900 text-gray-900"
-                : "border-transparent text-gray-500 hover:text-gray-700"
+                ? "border-accent text-ink"
+                : "border-transparent text-ink-secondary hover:text-ink-secondary"
             }`}
           >
             {tab.label}
@@ -422,7 +422,7 @@ export default function PropertyDetail() {
       {activeTab === "overview" && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
-            <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white sm:grid-cols-3 sm:divide-y-0">
+            <div className="grid grid-cols-2 divide-x divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface sm:grid-cols-3 sm:divide-y-0">
               <OverviewStat
                 label="Active Work Orders"
                 value={overview.activeCount}
@@ -473,7 +473,7 @@ export default function PropertyDetail() {
             </div>
 
             <div>
-              <h2 className="mb-3 text-sm font-semibold text-gray-900">Top Issues</h2>
+              <h2 className="mb-3 text-sm font-semibold text-ink">Top Issues</h2>
               {overview.topIssues.length === 0 ? (
                 <EmptyState
                   icon={IconWrench}
@@ -481,18 +481,18 @@ export default function PropertyDetail() {
                   description="No open Work Orders at this property right now."
                 />
               ) : (
-                <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+                <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
                   {overview.topIssues.map((row) => (
                     <Link
                       key={row.id}
                       to={`/portfolio/${propertyId}/work-orders/${row.id}`}
                       state={{ backLabel: "Overview", backTo: `/portfolio/${propertyId}`, backTabState: { tab: "overview" } }}
-                      className="block px-5 py-4 transition hover:bg-gray-50"
+                      className="block px-5 py-4 transition hover:bg-surface-subtle"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900">{row.title}</p>
-                          <p className="truncate text-xs text-gray-500">
+                          <p className="truncate text-sm font-medium text-ink">{row.title}</p>
+                          <p className="truncate text-xs text-ink-secondary">
                             {row.wherePrimary}
                             {row.whereSecondary && ` · ${row.whereSecondary}`}
                           </p>
@@ -500,19 +500,19 @@ export default function PropertyDetail() {
                         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                           <span
                             className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                              priorityBadge[row.priority] || "bg-gray-50 text-gray-500"
+                              priorityBadge[row.priority] || "bg-surface-subtle text-ink-secondary"
                             }`}
                           >
                             {row.priority}
                           </span>
                           {row.overdue && (
-                            <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-600 ring-1 ring-inset ring-red-100">
+                            <span className="rounded-full bg-red-50 dark:bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-red-600 dark:text-red-400 ring-1 ring-inset ring-red-100 dark:ring-red-500/20">
                               Overdue
                             </span>
                           )}
                           <span
                             className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                              statusBadge[row.status] || "bg-gray-50 text-gray-500"
+                              statusBadge[row.status] || "bg-surface-subtle text-ink-secondary"
                             }`}
                           >
                             {statusLabel[row.status] || row.status}
@@ -531,9 +531,9 @@ export default function PropertyDetail() {
               it occupies the same conceptual space a future site map will
               eventually take over, without faking a map now. */}
           <div className="space-y-6">
-            <div className="rounded-2xl border border-gray-200 bg-white p-5">
-              <h2 className="text-sm font-semibold text-gray-900">Locations</h2>
-              <p className="mt-0.5 text-xs text-gray-400">
+            <div className="rounded-2xl border border-line bg-surface p-5">
+              <h2 className="text-sm font-semibold text-ink">Locations</h2>
+              <p className="mt-0.5 text-xs text-ink-muted">
                 {locations.length} location{locations.length === 1 ? "" : "s"}
               </p>
 
@@ -543,20 +543,20 @@ export default function PropertyDetail() {
                     const childCount = locations.filter((l) => l.parentLocationId === loc.id).length;
                     return (
                       <li key={loc.id} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="truncate text-gray-700">{loc.name}</span>
-                        {childCount > 0 && <span className="shrink-0 text-xs text-gray-400">{childCount}</span>}
+                        <span className="truncate text-ink-secondary">{loc.name}</span>
+                        {childCount > 0 && <span className="shrink-0 text-xs text-ink-muted">{childCount}</span>}
                       </li>
                     );
                   })}
                 </ul>
               ) : (
-                <p className="mt-3 text-sm text-gray-400">No locations added yet.</p>
+                <p className="mt-3 text-sm text-ink-muted">No locations added yet.</p>
               )}
 
               <button
                 type="button"
                 onClick={() => setActiveTab("locations")}
-                className="mt-4 text-xs font-medium text-gray-500 transition hover:text-gray-900"
+                className="mt-4 text-xs font-medium text-ink-secondary transition hover:text-ink"
               >
                 View all locations →
               </button>
@@ -567,7 +567,7 @@ export default function PropertyDetail() {
                 href={property.sitePlanUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="block text-sm font-medium text-blue-600 hover:underline"
+                className="block text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
               >
                 View site plan
               </a>
@@ -606,13 +606,13 @@ export default function PropertyDetail() {
                     <button
                       type="button"
                       onClick={() => setShowCreateLocationModal(true)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-hover"
                     >
                       <IconPlus className="h-4 w-4" />
                       Add Location
                     </button>
                   ) : (
-                    <p className="text-xs text-gray-400">Restore this property to add new locations.</p>
+                    <p className="text-xs text-ink-muted">Restore this property to add new locations.</p>
                   ))}
               </div>
 
@@ -650,13 +650,13 @@ export default function PropertyDetail() {
                     <button
                       type="button"
                       onClick={() => setShowCreateAssetModal(true)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-hover"
                     >
                       <IconPlus className="h-4 w-4" />
                       Add Asset
                     </button>
                   ) : (
-                    <p className="text-xs text-gray-400">Restore this property to add new assets.</p>
+                    <p className="text-xs text-ink-muted">Restore this property to add new assets.</p>
                   ))}
               </div>
 
@@ -709,7 +709,7 @@ export default function PropertyDetail() {
                     <button
                       type="button"
                       onClick={() => setWorkOrdersAttentionFilter(null)}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-gray-800"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-xs font-medium text-accent-ink transition hover:bg-accent-hover"
                     >
                       {workOrdersAttentionFilter === "overdue" ? "Overdue" : "Needs Attention"}
                       <span aria-hidden="true">✕</span>
@@ -721,13 +721,13 @@ export default function PropertyDetail() {
                     <button
                       type="button"
                       onClick={() => setShowCreateModal(true)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-hover"
                     >
                       <IconPlus className="h-4 w-4" />
                       Create Work Order
                     </button>
                   ) : (
-                    <p className="text-xs text-gray-400">Restore this property to create new work orders.</p>
+                    <p className="text-xs text-ink-muted">Restore this property to create new work orders.</p>
                   ))}
               </div>
 
@@ -742,10 +742,10 @@ export default function PropertyDetail() {
               {workOrders.length > 0 && (
                 <div>
                   {(urgentCount > 0 || overdueCount > 0) && (
-                    <div className="mb-4 flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm">
-                      <span className="font-medium text-gray-700">Needs attention:</span>
-                      {urgentCount > 0 && <span className="text-red-600">{urgentCount} urgent</span>}
-                      {overdueCount > 0 && <span className="text-amber-700">{overdueCount} overdue</span>}
+                    <div className="mb-4 flex items-center gap-4 rounded-xl border border-line bg-surface-subtle px-4 py-2.5 text-sm">
+                      <span className="font-medium text-ink-secondary">Needs attention:</span>
+                      {urgentCount > 0 && <span className="text-red-600 dark:text-red-400">{urgentCount} urgent</span>}
+                      {overdueCount > 0 && <span className="text-amber-700 dark:text-amber-400">{overdueCount} overdue</span>}
                     </div>
                   )}
 

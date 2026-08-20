@@ -19,7 +19,7 @@ function formatShortDate(value) {
 
 function BackLink({ to, state, label }) {
   return (
-    <Link to={to} state={state} className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition hover:text-gray-900">
+    <Link to={to} state={state} className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-ink-secondary transition hover:text-ink">
       <IconArrowLeft className="h-4 w-4" />
       Back to {label}
     </Link>
@@ -33,8 +33,8 @@ function fallbackBackTarget() {
 function Stat({ label, value, accent }) {
   return (
     <div className="px-4 py-3.5 sm:px-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
-      <p className={`mt-1 text-xl font-semibold ${accent ? "text-red-600" : "text-gray-900"}`}>{value}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</p>
+      <p className={`mt-1 text-xl font-semibold ${accent ? "text-red-600 dark:text-red-400" : "text-ink"}`}>{value}</p>
     </div>
   );
 }
@@ -112,19 +112,19 @@ export default function VendorDetail() {
 
       <div className="mb-6">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{vendor.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">{vendor.name}</h1>
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
-              vendorStatusBadge[vendor.status] || "bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-100"
+              vendorStatusBadge[vendor.status] || "bg-surface-subtle text-ink-secondary ring-1 ring-inset ring-line"
             }`}
           >
             {vendor.status}
           </span>
         </div>
-        {vendor.category && <p className="mt-1 text-sm text-gray-500">{vendor.category}</p>}
+        {vendor.category && <p className="mt-1 text-sm text-ink-secondary">{vendor.category}</p>}
 
         {(vendor.contactName || vendor.phone || vendor.email) && (
-          <p className="mt-2 text-sm text-gray-700">
+          <p className="mt-2 text-sm text-ink-secondary">
             {vendor.contactName}
             {vendor.contactName && (vendor.phone || vendor.email) && " · "}
             {vendor.phone}
@@ -134,7 +134,7 @@ export default function VendorDetail() {
         )}
       </div>
 
-      <div className="mb-8 grid grid-cols-1 divide-x divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white sm:grid-cols-4 sm:divide-y-0">
+      <div className="mb-8 grid grid-cols-1 divide-x divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface sm:grid-cols-4 sm:divide-y-0">
         <Stat label="Properties Worked" value={vendor.propertiesWorked.length} />
         <Stat label="Work Orders" value={vendor.workOrders.length} />
         <Stat label="Actual Vendor Spend" value={formatMoney(vendor.actualSpend)} />
@@ -142,7 +142,7 @@ export default function VendorDetail() {
       </div>
 
       <div>
-        <h2 className="mb-3 text-sm font-semibold text-gray-900">Work History</h2>
+        <h2 className="mb-3 text-sm font-semibold text-ink">Work History</h2>
         {vendor.workOrders.length === 0 ? (
           <EmptyState
             icon={IconTruck}
@@ -150,17 +150,17 @@ export default function VendorDetail() {
             description="Work Orders this vendor is assigned to will appear here."
           />
         ) : (
-          <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+          <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
             {vendor.workOrders.map((wo) => (
               <Link
                 key={wo.id}
                 to={`/portfolio/${wo.propertyId}/work-orders/${wo.id}`}
                 state={{ backLabel: "Vendor", backTo: `/vendors/${vendorId}` }}
-                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-5 py-4 transition hover:bg-gray-50"
+                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-5 py-4 transition hover:bg-surface-subtle"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-gray-900">{wo.title}</p>
-                  <p className="truncate text-xs text-gray-500">
+                  <p className="truncate text-sm font-medium text-ink">{wo.title}</p>
+                  <p className="truncate text-xs text-ink-secondary">
                     {wo.property?.name}
                     {wo.location && ` · ${wo.location.name}`}
                     {wo.category && ` · ${categoryLabel[wo.category] ?? wo.category}`}
@@ -172,13 +172,13 @@ export default function VendorDetail() {
                 <div className="flex shrink-0 items-center gap-3">
                   <span
                     className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                      woStatusBadge[wo.status] || "bg-gray-50 text-gray-500"
+                      woStatusBadge[wo.status] || "bg-surface-subtle text-ink-secondary"
                     }`}
                   >
                     {statusLabel[wo.status] || wo.status}
                   </span>
-                  <span className="w-20 text-right text-sm font-medium text-gray-900">
-                    {wo.vendorSpend > 0 ? formatMoney(wo.vendorSpend) : <span className="font-normal text-gray-300">—</span>}
+                  <span className="w-20 text-right text-sm font-medium text-ink">
+                    {wo.vendorSpend > 0 ? formatMoney(wo.vendorSpend) : <span className="font-normal text-ink-muted">—</span>}
                   </span>
                 </div>
               </Link>

@@ -30,10 +30,9 @@ function resolve(preference) {
 // Stamped on the root element rather than anywhere React renders into —
 // this is exactly what index.html's own inline script sets synchronously
 // before React ever paints (see that script's comment for why), and this
-// effect keeps it in sync afterward. No CSS reacts to this attribute yet;
-// that's the next milestone's actual styling sweep. This only makes sure
-// that work has a real, already-correct signal to hook into rather than
-// needing to invent one.
+// effect keeps it in sync afterward. index.css's @custom-variant dark and
+// the surface/text/border/accent tokens both key off this attribute, so
+// changing it here is what actually repaints the app.
 function applyToDocument(resolvedTheme) {
   document.documentElement.dataset.theme = resolvedTheme;
 }

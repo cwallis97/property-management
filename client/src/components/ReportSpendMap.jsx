@@ -66,18 +66,18 @@ export default function ReportSpendMap({ propertyId, matchingWorkOrders, reportS
 
   if (sitePlanStatus === "none") {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-24 text-center">
-        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-50 text-gray-400">
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface px-6 py-24 text-center">
+        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-subtle text-ink-muted">
           <IconWrench className="h-6 w-6" />
         </div>
-        <h3 className="text-base font-semibold text-gray-900">No Site Plan for this property</h3>
-        <p className="mt-2 max-w-sm text-sm text-gray-500">
+        <h3 className="text-base font-semibold text-ink">No Site Plan for this property</h3>
+        <p className="mt-2 max-w-sm text-sm text-ink-secondary">
           A Site Plan is required to view Maintenance Spend spatially. Upload one from this property's Map tab.
         </p>
         <Link
           to={`/portfolio/${propertyId}`}
           state={{ tab: "map" }}
-          className="mt-6 inline-flex items-center rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+          className="mt-6 inline-flex items-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink transition hover:bg-accent-hover"
         >
           Go to Property Map
         </Link>
@@ -102,27 +102,27 @@ export default function ReportSpendMap({ propertyId, matchingWorkOrders, reportS
       popover: isSelected ? (
         <span
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-full left-1/2 z-10 mb-2 w-56 -translate-x-1/2 cursor-default rounded-xl border border-gray-200 bg-white p-3 text-left shadow-lg"
+          className="absolute bottom-full left-1/2 z-10 mb-2 w-56 -translate-x-1/2 cursor-default rounded-xl border border-line bg-surface p-3 text-left shadow-lg"
         >
-          <p className="truncate text-sm font-medium text-gray-900">{wo.title}</p>
-          {wo.locationName && <p className="mt-1 truncate text-xs text-gray-500">{wo.locationName}</p>}
+          <p className="truncate text-sm font-medium text-ink">{wo.title}</p>
+          {wo.locationName && <p className="mt-1 truncate text-xs text-ink-secondary">{wo.locationName}</p>}
           <div className="mt-1.5 flex flex-wrap items-center gap-1">
             <span
               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                statusBadge[wo.status] || "bg-gray-50 text-gray-500"
+                statusBadge[wo.status] || "bg-surface-subtle text-ink-secondary"
               }`}
             >
               {statusLabel[wo.status] || wo.status}
             </span>
           </div>
-          <p className="mt-1.5 text-xs text-gray-500">
-            <span className="text-[10px] uppercase tracking-wide text-gray-400">Spend in Period </span>
-            <span className="font-medium text-gray-900">{formatMoney(wo.spendInPeriod)}</span>
+          <p className="mt-1.5 text-xs text-ink-secondary">
+            <span className="text-[10px] uppercase tracking-wide text-ink-muted">Spend in Period </span>
+            <span className="font-medium text-ink">{formatMoney(wo.spendInPeriod)}</span>
           </p>
           <Link
             to={`/portfolio/${wo.propertyId}/work-orders/${wo.id}`}
             state={{ backLabel: "Maintenance Spend", backTo: "/reports", backTabState: { reportState } }}
-            className="mt-2 block text-xs font-medium text-blue-600 hover:underline"
+            className="mt-2 block text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
           >
             View Work Order →
           </Link>
@@ -133,8 +133,8 @@ export default function ReportSpendMap({ propertyId, matchingWorkOrders, reportS
 
   return (
     <div>
-      <p className="mb-3 text-sm text-gray-500">
-        <span className="font-medium text-gray-900">
+      <p className="mb-3 text-sm text-ink-secondary">
+        <span className="font-medium text-ink">
           {mappedWorkOrders.length} of {matchingWorkOrders.length}
         </span>{" "}
         matching Work Order{matchingWorkOrders.length === 1 ? "" : "s"} {mappedWorkOrders.length === 1 ? "is" : "are"} mapped.
@@ -147,7 +147,7 @@ export default function ReportSpendMap({ propertyId, matchingWorkOrders, reportS
           description="Spend totals above still include all of them — mapping is just a spatial view, not a filter on the report."
         />
       ) : (
-        <div className="rounded-2xl border border-gray-200 bg-white p-4">
+        <div className="rounded-2xl border border-line bg-surface p-4">
           <SitePlanCanvas fileStatus={fileStatus} fileUrl={fileUrl} fileObjectType={fileObjectType} height="70vh" markers={markers} />
         </div>
       )}

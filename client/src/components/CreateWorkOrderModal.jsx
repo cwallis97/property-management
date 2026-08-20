@@ -177,13 +177,13 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
 
   return (
     <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-gray-900/40 px-4 py-8 sm:items-center">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <h2 className="text-base font-semibold text-gray-900">Create Work Order</h2>
+      <div className="w-full max-w-md rounded-2xl bg-surface shadow-xl">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
+          <h2 className="text-base font-semibold text-ink">Create Work Order</h2>
           <button
             type="button"
             onClick={() => !submitting && onClose()}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-50 hover:text-gray-600"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition hover:bg-surface-subtle hover:text-ink-secondary"
             aria-label="Close"
           >
             <IconX className="h-4 w-4" />
@@ -192,14 +192,14 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
 
         <form onSubmit={handleSubmit} className="space-y-4 px-5 py-5">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">What's wrong?</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">What's wrong?</label>
             <input
               type="text"
               autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Water leak near Unit 101"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-base text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-base text-ink placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
             />
           </div>
 
@@ -209,12 +209,12 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Add details if useful (optional)"
               rows={2}
-              className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full resize-none rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-secondary placeholder:text-ink-muted focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">Category</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Category</label>
             <div className="flex flex-wrap gap-1.5">
               {WORK_ORDER_CATEGORIES.map((c) => (
                 <button
@@ -222,7 +222,7 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
                   type="button"
                   onClick={() => handleCategoryClick(c.value)}
                   className={`rounded-lg px-2.5 py-1.5 text-sm font-medium transition ${
-                    category === c.value ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                    category === c.value ? "bg-accent text-accent-ink" : "bg-surface-subtle text-ink-secondary hover:bg-line"
                   }`}
                 >
                   {c.label}
@@ -233,7 +233,7 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
 
           {category && (
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-900">Work Type</label>
+              <label className="mb-1.5 block text-sm font-medium text-ink">Work Type</label>
               <SearchableSelect
                 value={workTypeId}
                 onChange={setWorkTypeId}
@@ -244,7 +244,7 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
           )}
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">Where</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Where</label>
             <SearchableSelect
               value={effectiveLocationId}
               onChange={setLocationId}
@@ -256,7 +256,7 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">Asset</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Asset</label>
             <SearchableSelect
               value={assetId}
               onChange={setAssetId}
@@ -268,12 +268,12 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
           {sitePlanStatus === "ready" && (
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <label className="block text-sm font-medium text-gray-900">Location on map</label>
+                <label className="block text-sm font-medium text-ink">Location on map</label>
                 {mapPosition && (
                   <button
                     type="button"
                     onClick={() => setMapPosition(null)}
-                    className="text-xs font-medium text-gray-400 transition hover:text-gray-600"
+                    className="text-xs font-medium text-ink-muted transition hover:text-ink-secondary"
                   >
                     Clear
                   </button>
@@ -284,13 +284,13 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
                 <button
                   type="button"
                   onClick={() => setMapStepOpen(true)}
-                  className="w-full rounded-lg border border-dashed border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-500 transition hover:border-gray-400 hover:text-gray-700"
+                  className="w-full rounded-lg border border-dashed border-line-strong px-3 py-2.5 text-sm font-medium text-ink-secondary transition hover:border-line-strong hover:text-ink-secondary"
                 >
                   Mark Location on Map
                 </button>
               ) : (
                 <>
-                  <p className="mb-1.5 text-xs text-gray-400">Click the map to set the exact position.</p>
+                  <p className="mb-1.5 text-xs text-ink-muted">Click the map to set the exact position.</p>
                   <SitePlanCanvas
                     fileStatus={fileStatus}
                     fileUrl={fileUrl}
@@ -306,7 +306,7 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
           )}
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">Priority</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Priority</label>
             <div className="flex gap-1.5">
               {PRIORITIES.map((p) => (
                 <button
@@ -315,8 +315,8 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
                   onClick={() => setPriority(p.value)}
                   className={`flex-1 rounded-lg px-2 py-2 text-sm font-medium transition ${
                     priority === p.value
-                      ? "bg-gray-900 text-white"
-                      : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                      ? "bg-accent text-accent-ink"
+                      : "bg-surface-subtle text-ink-secondary hover:bg-line"
                   }`}
                 >
                   {p.label}
@@ -326,29 +326,29 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-900">Due date</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Due date</label>
             <input
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-ink focus:border-line-strong focus:outline-none focus:ring-1 focus:ring-line-strong"
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
           <div className="flex gap-2 pt-1">
             <button
               type="button"
               onClick={() => !submitting && onClose()}
-              className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              className="flex-1 rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-ink-secondary transition hover:bg-surface-subtle"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex-1 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? "Creating..." : "Create Work Order"}
             </button>

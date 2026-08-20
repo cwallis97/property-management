@@ -64,12 +64,12 @@ export default function EntityDocuments({ attachment, title = "Documents" }) {
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">{title}</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{title}</h2>
         {canManage && (
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 transition hover:text-gray-900"
+            className="inline-flex items-center gap-1 text-xs font-medium text-ink-secondary transition hover:text-ink"
           >
             <IconPlus className="h-3.5 w-3.5" />
             Add Document
@@ -78,21 +78,21 @@ export default function EntityDocuments({ attachment, title = "Documents" }) {
       </div>
 
       {status === "loading" && <SectionSpinner />}
-      {status === "error" && <p className="text-sm text-red-600">Couldn't load documents. Please try again.</p>}
+      {status === "error" && <p className="text-sm text-red-600 dark:text-red-400">Couldn't load documents. Please try again.</p>}
 
-      {status === "ready" && visibleDocuments.length === 0 && <p className="text-sm text-gray-400">No documents yet.</p>}
+      {status === "ready" && visibleDocuments.length === 0 && <p className="text-sm text-ink-muted">No documents yet.</p>}
 
       {status === "ready" && visibleDocuments.length > 0 && (
-        <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+        <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
           {visibleDocuments.map((doc) => (
             <div
               key={doc.id}
               onClick={() => openDocumentFile(doc.id)}
-              className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 transition hover:bg-gray-50"
+              className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 transition hover:bg-surface-subtle"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-gray-900">{doc.name}</p>
-                <p className="text-xs text-gray-400">
+                <p className="truncate text-sm font-medium text-ink">{doc.name}</p>
+                <p className="text-xs text-ink-muted">
                   {documentCategoryLabel[doc.category] || doc.category} · {formatShortDate(doc.createdAt)}
                 </p>
               </div>
@@ -101,14 +101,14 @@ export default function EntityDocuments({ attachment, title = "Documents" }) {
                   <button
                     type="button"
                     onClick={() => setEditingDocument(doc)}
-                    className="text-xs font-medium text-gray-500 transition hover:text-gray-900"
+                    className="text-xs font-medium text-ink-secondary transition hover:text-ink"
                   >
                     Edit
                   </button>
                   <button
                     type="button"
                     onClick={() => handleArchive(doc)}
-                    className="text-xs font-medium text-gray-500 transition hover:text-red-600"
+                    className="text-xs font-medium text-ink-secondary transition hover:text-red-600 dark:hover:text-red-400"
                   >
                     Archive
                   </button>

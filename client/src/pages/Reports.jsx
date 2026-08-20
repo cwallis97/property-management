@@ -57,8 +57,8 @@ function formatShortDate(value) {
 function StatTile({ label, value }) {
   return (
     <div className="px-4 py-3.5 sm:px-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-gray-900">{value}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-ink">{value}</p>
     </div>
   );
 }
@@ -199,14 +199,14 @@ export default function Reports() {
       <PageHeader title="Maintenance Spend" description="Where maintenance dollars are actually going, traced back to real Work Orders." />
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex flex-wrap rounded-lg border border-gray-200 bg-gray-50 p-1">
+        <div className="inline-flex flex-wrap rounded-lg border border-line bg-surface-subtle p-1">
           {RANGE_OPTIONS.map((option) => (
             <button
               key={option.value}
               type="button"
               onClick={() => setRangeKey(option.value)}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                rangeKey === option.value ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                rangeKey === option.value ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
               }`}
             >
               {option.label}
@@ -227,7 +227,7 @@ export default function Reports() {
 
       {dataStatus === "ready" && data && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="grid grid-cols-1 divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             <StatTile label="Total Maintenance Spend" value={formatMoney(data.summary.totalSpend)} />
             <StatTile label="Work Orders With Cost" value={data.summary.workOrdersWithCost} />
             <StatTile label="Average Cost / Work Order" value={formatMoney(data.summary.averageCostPerWorkOrder)} />
@@ -235,12 +235,12 @@ export default function Reports() {
 
           {(category || workTypeId) && (
             <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-sm">
-              <button type="button" onClick={goToRoot} className="text-gray-500 transition hover:text-gray-900">
+              <button type="button" onClick={goToRoot} className="text-ink-secondary transition hover:text-ink">
                 Maintenance Spend
               </button>
               {category && (
                 <>
-                  <span className="text-gray-300">›</span>
+                  <span className="text-ink-muted">›</span>
                   {workTypeId ? (
                     <button
                       type="button"
@@ -249,19 +249,19 @@ export default function Reports() {
                         setWorkTypeLabelText(null);
                         setViewMode("list");
                       }}
-                      className="text-gray-500 transition hover:text-gray-900"
+                      className="text-ink-secondary transition hover:text-ink"
                     >
                       {categoryLabelText}
                     </button>
                   ) : (
-                    <span className="font-medium text-gray-900">{categoryLabelText}</span>
+                    <span className="font-medium text-ink">{categoryLabelText}</span>
                   )}
                 </>
               )}
               {workTypeId && (
                 <>
-                  <span className="text-gray-300">›</span>
-                  <span className="font-medium text-gray-900">{workTypeLabelText}</span>
+                  <span className="text-ink-muted">›</span>
+                  <span className="font-medium text-ink">{workTypeLabelText}</span>
                 </>
               )}
             </nav>
@@ -269,22 +269,22 @@ export default function Reports() {
 
           {!workTypeId && (
             <div>
-              <h2 className="mb-3 text-sm font-semibold text-gray-900">{breakdownLabel} Breakdown</h2>
+              <h2 className="mb-3 text-sm font-semibold text-ink">{breakdownLabel} Breakdown</h2>
               {data.breakdown.length === 0 ? (
                 <EmptyState icon={IconWrench} title="No recorded spend in this range" description="Adjust the date range or property filter to see Maintenance Spend." />
               ) : (
-                <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+                <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
                   {data.breakdown.map((row) => (
                     <button
                       key={row.key}
                       type="button"
                       onClick={() => (category ? selectWorkType(row) : selectCategory(row))}
-                      className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-gray-50"
+                      className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-surface-subtle"
                     >
-                      <span className="truncate text-sm font-medium text-gray-900">{row.label}</span>
+                      <span className="truncate text-sm font-medium text-ink">{row.label}</span>
                       <span className="flex shrink-0 items-center gap-4 text-sm">
-                        <span className="text-gray-400">{row.workOrders} work order{row.workOrders === 1 ? "" : "s"}</span>
-                        <span className="w-24 text-right font-medium text-gray-900">{formatMoney(row.spend)}</span>
+                        <span className="text-ink-muted">{row.workOrders} work order{row.workOrders === 1 ? "" : "s"}</span>
+                        <span className="w-24 text-right font-medium text-ink">{formatMoney(row.spend)}</span>
                       </span>
                     </button>
                   ))}
@@ -296,14 +296,14 @@ export default function Reports() {
           {workTypeId && (
             <div>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-gray-900">Work Orders</h2>
+                <h2 className="text-sm font-semibold text-ink">Work Orders</h2>
 
-                <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                <div className="inline-flex rounded-lg border border-line bg-surface-subtle p-1">
                   <button
                     type="button"
                     onClick={() => setViewMode("list")}
                     className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                      viewMode === "list" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                      viewMode === "list" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
                     }`}
                   >
                     List
@@ -314,7 +314,7 @@ export default function Reports() {
                     title={propertyId ? undefined : "Select a single property to view Work Orders on the map."}
                     onClick={() => propertyId && setViewMode("map")}
                     className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                      viewMode === "map" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                      viewMode === "map" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
                     } ${!propertyId ? "cursor-not-allowed opacity-50" : ""}`}
                   >
                     Map
@@ -323,7 +323,7 @@ export default function Reports() {
               </div>
 
               {!propertyId && (
-                <p className="mb-3 text-xs text-gray-400">Select a single property above to view these Work Orders on the map.</p>
+                <p className="mb-3 text-xs text-ink-muted">Select a single property above to view these Work Orders on the map.</p>
               )}
 
               {workOrdersStatus === "loading" && <SectionSpinner />}
@@ -336,17 +336,17 @@ export default function Reports() {
               )}
 
               {workOrdersStatus === "ready" && workOrders.length > 0 && viewMode === "list" && (
-                <div className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white">
+                <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
                   {workOrders.map((wo) => (
                     <Link
                       key={wo.id}
                       to={`/portfolio/${wo.propertyId}/work-orders/${wo.id}`}
                       state={{ backLabel: "Maintenance Spend", backTo: "/reports", backTabState: { reportState } }}
-                      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-5 py-4 transition hover:bg-gray-50"
+                      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-5 py-4 transition hover:bg-surface-subtle"
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-gray-900">{wo.title}</p>
-                        <p className="truncate text-xs text-gray-500">
+                        <p className="truncate text-sm font-medium text-ink">{wo.title}</p>
+                        <p className="truncate text-xs text-ink-secondary">
                           {wo.propertyName}
                           {wo.locationName && ` · ${wo.locationName}`}
                           {" · Reported "}
@@ -355,13 +355,13 @@ export default function Reports() {
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
                         <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadge[wo.status] || "bg-gray-50 text-gray-500"}`}
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadge[wo.status] || "bg-surface-subtle text-ink-secondary"}`}
                         >
                           {statusLabel[wo.status] || wo.status}
                         </span>
                         <span className="text-right">
-                          <span className="block text-[10px] uppercase tracking-wide text-gray-400">Spend in Period</span>
-                          <span className="font-medium text-gray-900">{formatMoney(wo.spendInPeriod)}</span>
+                          <span className="block text-[10px] uppercase tracking-wide text-ink-muted">Spend in Period</span>
+                          <span className="font-medium text-ink">{formatMoney(wo.spendInPeriod)}</span>
                         </span>
                       </div>
                     </Link>
