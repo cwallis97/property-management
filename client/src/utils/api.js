@@ -81,16 +81,126 @@ export async function apiUpload(path, formData, method = "POST") {
   return res.json();
 }
 
-export function getProperties() {
-  return apiFetch("/api/properties");
+// No Authorization header at all — for the one legitimate no-auth case in
+// this app: previewing an invitation before the visitor has necessarily
+// signed in yet. Never used for anything that returns real Company data;
+// the backend endpoint behind this is itself deliberately minimal.
+export async function apiFetchPublic(path) {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: { "Content-Type": "application/json" },
+  });
+  await throwIfNotOk(res);
+  return res.json();
+}
+
+// Defaults to active-only Properties server-side — every caller that omits
+// `params` (the Property Scope selector, every portfolio-wide filter
+// picker, the global Add Document target picker) automatically stops
+// offering archived Properties for free. Portfolio's own Active/Archived/
+// All toggle is the one caller that passes { status }.
+// The caller's own identity plus their Membership role(s) — used only to
+// resolve "what can I do," never trusted as a substitute for backend
+// authorization, which independently re-derives the caller's role from
+// their session on every request regardless of what this returns.
+export function getCurrentUser() {
+  return apiFetch("/api/users/me");
+}
+
+// Self-scoped server-side — there is no id to pass, and none would be
+// honored; this can only ever change the caller's own displayName.
+export function updateCurrentUser(payload) {
+  return apiFetch("/api/users/me", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+// Admin/Owner-only server-side. name is the only field the backend accepts
+// — see the Organization Settings audit for why nothing else belongs here.
+export function updateCompany(id, name) {
+  return apiFetch(`/api/companies/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ name }),
+  });
+}
+
+// Both Admin/Owner-only server-side — the caller's own Company is always
+// implicit (never a client-supplied company id), matching the same
+// single-company assumption Vendor creation and Property Scope already make.
+export function getMembers() {
+  return apiFetch("/api/members");
+}
+
+export function updateMemberRole(membershipId, role) {
+  return apiFetch(`/api/members/${membershipId}`, {
+    method: "PUT",
+    body: JSON.stringify({ role }),
+  });
+}
+
+// Invitations — Admin/Owner-only management (create/list/revoke, all
+// implicit to the caller's own Company) plus the two invitee-facing
+// redemption calls, which key off the invitation's token rather than any
+// id the frontend would otherwise need to know.
+export function getPendingInvites() {
+  return apiFetch("/api/invites");
+}
+
+export function createInvite(payload) {
+  return apiFetch("/api/invites", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function revokeInvite(id) {
+  return apiFetch(`/api/invites/${id}`, { method: "DELETE" });
+}
+
+// Public — the visitor may not be signed in yet when they first open an
+// invitation link.
+export function getInvitePreview(token) {
+  return apiFetchPublic(`/api/invites/token/${token}`);
+}
+
+// Requires an authenticated Firebase session (the visitor signs in/up on
+// the Join page first) but not Company membership — accepting IS what
+// creates that membership.
+export function acceptInvite(token) {
+  return apiFetch(`/api/invites/token/${token}/accept`, { method: "POST" });
+}
+
+export function getProperties(params = {}) {
+  return apiFetch(`/api/properties${toQueryString(params)}`);
 }
 
 export function getProperty(id) {
   return apiFetch(`/api/properties/${id}`);
 }
 
+export function createProperty(payload) {
+  return apiFetch("/api/properties", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateProperty(id, payload) {
+  return apiFetch(`/api/properties/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getLocations(propertyId) {
   return apiFetch(`/api/properties/${propertyId}/locations`);
+}
+
+export function createLocation(propertyId, payload) {
+  return apiFetch(`/api/properties/${propertyId}/locations`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function getAssets(propertyId) {
@@ -104,6 +214,18 @@ export function getAsset(id) {
 export function createAsset(propertyId, payload) {
   return apiFetch(`/api/properties/${propertyId}/assets`, {
     method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+// Property is deliberately not a field this ever sends — the backend
+// endpoint doesn't accept it either; an Asset's Property is immutable after
+// creation. Returns the bare Asset row, not the enriched Asset Detail
+// shape (property/location/workOrders/lifetimeSpend), so callers refetch
+// getAsset() afterward rather than using this response directly.
+export function updateAsset(id, payload) {
+  return apiFetch(`/api/assets/${id}`, {
+    method: "PUT",
     body: JSON.stringify(payload),
   });
 }

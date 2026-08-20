@@ -11,9 +11,13 @@ import WorkOrderTable, { priorityBadge, statusBadge, statusLabel } from "../comp
 import WorkOrderViewFilter from "../components/WorkOrderViewFilter";
 import CreateWorkOrderModal from "../components/CreateWorkOrderModal";
 import CreateAssetModal from "../components/CreateAssetModal";
+import CreateLocationModal from "../components/CreateLocationModal";
 import EntityDocuments from "../components/EntityDocuments";
 import { IconBuilding, IconAlertTriangle, IconBox, IconWrench, IconPlus } from "../components/icons";
 import { getProperty, getLocations, getAssets, getWorkOrders } from "../utils/api";
+import { usePropertyScope } from "../context/PropertyScopeContext";
+import { useAuth } from "../context/AuthContext";
+import { CAPABILITIES } from "../utils/capabilities";
 import { formatAge, isOverdue, needsAttention, compareByAttention, filterWorkOrdersByView } from "../utils/workOrders";
 
 const TABS = [
@@ -61,12 +65,15 @@ export default function PropertyDetail() {
   const { propertyId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { setPropertyScope } = usePropertyScope();
+  const { hasCapability } = useAuth();
   // Returning from a Work Order's detail page passes back which tab to
   // land on (see WorkOrderDetail's back link), so the user doesn't lose
   // their place after finishing an action.
   const [activeTab, setActiveTab] = useState(location.state?.tab ?? "overview");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateAssetModal, setShowCreateAssetModal] = useState(false);
+  const [showCreateLocationModal, setShowCreateLocationModal] = useState(false);
   // Same return-to-origin pattern as activeTab: opening a completed Work
   // Order from the Completed view and clicking back should land back on
   // Completed, not silently reset to the Active default.
@@ -127,6 +134,11 @@ export default function PropertyDetail() {
         if (cancelled) return;
         setProperty(data);
         setPropertyStatus("ready");
+        // Entering Property Detail establishes it as the app's active
+        // scope — the URL is the source of truth here, so this always
+        // overwrites whatever scope was previously set, even a stale one
+        // restored from a prior session.
+        setPropertyScope({ id: data.id, name: data.name });
       })
       .catch((err) => {
         if (cancelled) return;
@@ -180,7 +192,7 @@ export default function PropertyDetail() {
     return () => {
       cancelled = true;
     };
-  }, [propertyId]);
+  }, [propertyId, setPropertyScope]);
 
   // Resolves each asset's locationId to a display label using the
   // already-loaded Locations list — no per-asset requests. If Locations
@@ -374,6 +386,15 @@ export default function PropertyDetail() {
         title={property.name}
         description={property.address || "No address on file"}
       />
+
+      {property.status === "archived" && (
+        <p className="mb-6 flex items-center gap-2 text-sm text-gray-500">
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-gray-500 ring-1 ring-inset ring-gray-200">
+            Archived
+          </span>
+          Removed from active operations. Locations, Assets, Work Orders, Documents, and history remain fully preserved. Manage this from Settings → Properties.
+        </p>
+      )}
 
       <div className="mb-6 flex gap-6 border-b border-gray-200">
         {TABS.map((tab) => (
@@ -577,15 +598,35 @@ export default function PropertyDetail() {
             />
           )}
 
-          {locationsStatus === "ready" && locations.length === 0 && (
-            <EmptyState
-              icon={IconBuilding}
-              title="No locations yet"
-              description="Buildings, floors, units, and other locations added to this property will show up here."
-            />
-          )}
+          {locationsStatus === "ready" && (
+            <>
+              <div className="mb-4 flex justify-end">
+                {hasCapability(CAPABILITIES.LOCATION_MANAGE) &&
+                  (property.status === "active" ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateLocationModal(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+                    >
+                      <IconPlus className="h-4 w-4" />
+                      Add Location
+                    </button>
+                  ) : (
+                    <p className="text-xs text-gray-400">Restore this property to add new locations.</p>
+                  ))}
+              </div>
 
-          {locationsStatus === "ready" && locations.length > 0 && <LocationList locations={locations} />}
+              {locations.length === 0 && (
+                <EmptyState
+                  icon={IconBuilding}
+                  title="No locations yet"
+                  description="Sites, lots, common areas, and other physical locations added to this property will show up here."
+                />
+              )}
+
+              {locations.length > 0 && <LocationList locations={locations} />}
+            </>
+          )}
         </div>
       )}
 
@@ -604,14 +645,19 @@ export default function PropertyDetail() {
           {assetsStatus === "ready" && (
             <>
               <div className="mb-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateAssetModal(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
-                >
-                  <IconPlus className="h-4 w-4" />
-                  Add Asset
-                </button>
+                {hasCapability(CAPABILITIES.ASSET_CREATE) &&
+                  (property.status === "active" ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateAssetModal(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+                    >
+                      <IconPlus className="h-4 w-4" />
+                      Add Asset
+                    </button>
+                  ) : (
+                    <p className="text-xs text-gray-400">Restore this property to add new assets.</p>
+                  ))}
               </div>
 
               {assets.length === 0 && (
@@ -670,14 +716,19 @@ export default function PropertyDetail() {
                     </button>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
-                >
-                  <IconPlus className="h-4 w-4" />
-                  Create Work Order
-                </button>
+                {hasCapability(CAPABILITIES.WORK_ORDER_CREATE) &&
+                  (property.status === "active" ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateModal(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+                    >
+                      <IconPlus className="h-4 w-4" />
+                      Create Work Order
+                    </button>
+                  ) : (
+                    <p className="text-xs text-gray-400">Restore this property to create new work orders.</p>
+                  ))}
               </div>
 
               {workOrders.length === 0 && (
@@ -762,6 +813,18 @@ export default function PropertyDetail() {
           onCreated={(created) => {
             setAssets((prev) => [...prev, created]);
             setShowCreateAssetModal(false);
+          }}
+        />
+      )}
+
+      {showCreateLocationModal && (
+        <CreateLocationModal
+          propertyId={propertyId}
+          locations={locations}
+          onClose={() => setShowCreateLocationModal(false)}
+          onCreated={(created) => {
+            setLocations((prev) => [...prev, created]);
+            setShowCreateLocationModal(false);
           }}
         />
       )}

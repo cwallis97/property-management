@@ -7,6 +7,7 @@ import { IconBuilding, IconAlertTriangle, IconWrench } from "../components/icons
 import { priorityBadge, statusBadge, statusLabel } from "../components/WorkOrderTable";
 import { getDashboardSummary } from "../utils/api";
 import { formatAge, isOverdue, needsAttention, compareByAttention, resolveWorkOrderContext } from "../utils/workOrders";
+import { usePropertyScope } from "../context/PropertyScopeContext";
 
 // Sensible cap so this stays a scannable exception list, not a second
 // Work Orders table. Anything beyond this is still fully counted in the
@@ -26,6 +27,7 @@ function PulseStat({ label, value, accent }) {
 }
 
 export default function Dashboard() {
+  const { propertyId: scopePropertyId, property: scopeProperty } = usePropertyScope();
   const [summary, setSummary] = useState(null);
   const [status, setStatus] = useState("loading"); // "loading" | "error" | "ready"
   const [error, setError] = useState(null);
@@ -51,16 +53,32 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Enriches each active work order (already filtered server-side) with the
-  // same Location/Asset/overdue/attention logic used on PropertyDetail and
-  // WorkOrderDetail, reused via utils/workOrders — never a second
-  // definition of "overdue" or "needs attention".
-  const rows = useMemo(() => {
-    if (!summary) return [];
-    const propertyById = new Map(summary.properties.map((p) => [p.id, p]));
+  // Property scope is pure client-side filtering over the one already-
+  // fetched, company-wide summary — no second backend call. When unscoped
+  // this is a no-op pass-through, so "All Properties" behaves exactly as
+  // it always has.
+  const scopedSummary = useMemo(() => {
+    if (!summary) return null;
+    if (!scopePropertyId) return summary;
+    return {
+      properties: summary.properties.filter((p) => p.id === scopePropertyId),
+      locations: summary.locations.filter((l) => l.propertyId === scopePropertyId),
+      assets: summary.assets.filter((a) => a.propertyId === scopePropertyId),
+      workOrders: summary.workOrders.filter((wo) => wo.propertyId === scopePropertyId),
+    };
+  }, [summary, scopePropertyId]);
 
-    return summary.workOrders.map((wo) => {
-      const { locationLabel, assetLabel } = resolveWorkOrderContext(wo, summary.locations, summary.assets);
+  // Enriches each active work order (already filtered server-side, and now
+  // optionally scoped to one Property above) with the same Location/Asset/
+  // overdue/attention logic used on PropertyDetail and WorkOrderDetail,
+  // reused via utils/workOrders — never a second definition of "overdue" or
+  // "needs attention".
+  const rows = useMemo(() => {
+    if (!scopedSummary) return [];
+    const propertyById = new Map(scopedSummary.properties.map((p) => [p.id, p]));
+
+    return scopedSummary.workOrders.map((wo) => {
+      const { locationLabel, assetLabel } = resolveWorkOrderContext(wo, scopedSummary.locations, scopedSummary.assets);
       return {
         id: wo.id,
         propertyId: wo.propertyId,
@@ -76,21 +94,25 @@ export default function Dashboard() {
         createdAtMs: new Date(wo.createdAt).getTime(),
       };
     });
-  }, [summary]);
+  }, [scopedSummary]);
 
   const attentionRows = useMemo(() => rows.filter((r) => r.needsAttention).sort(compareByAttention), [rows]);
   const visibleAttentionRows = attentionRows.slice(0, ATTENTION_LIMIT);
   const hiddenAttentionCount = attentionRows.length - visibleAttentionRows.length;
 
   const overdueCount = rows.filter((r) => r.overdue).length;
-  const criticalAssetCount = summary ? summary.assets.filter((a) => a.status === "critical").length : 0;
-  const needsAttentionAssetCount = summary ? summary.assets.filter((a) => a.status === "needs-attention").length : 0;
+  const criticalAssetCount = scopedSummary ? scopedSummary.assets.filter((a) => a.status === "critical").length : 0;
+  const needsAttentionAssetCount = scopedSummary
+    ? scopedSummary.assets.filter((a) => a.status === "needs-attention").length
+    : 0;
 
   // Property Pressure: deterministic precedence — urgent+overdue, then
   // urgent, then overdue, then critical assets, then needs-attention
   // assets, then active work order volume. No score, just facts, sorted.
+  // Scoped to one Property, this naturally collapses to a single row — an
+  // honest reflection of scope, not a special case to hide.
   const propertyPressure = useMemo(() => {
-    if (!summary) return [];
+    if (!scopedSummary) return [];
 
     const rowsByProperty = new Map();
     for (const row of rows) {
@@ -98,12 +120,12 @@ export default function Dashboard() {
       rowsByProperty.get(row.propertyId).push(row);
     }
     const assetsByProperty = new Map();
-    for (const asset of summary.assets) {
+    for (const asset of scopedSummary.assets) {
       if (!assetsByProperty.has(asset.propertyId)) assetsByProperty.set(asset.propertyId, []);
       assetsByProperty.get(asset.propertyId).push(asset);
     }
 
-    const list = summary.properties.map((property) => {
+    const list = scopedSummary.properties.map((property) => {
       const propertyRows = rowsByProperty.get(property.id) ?? [];
       const propertyAssets = assetsByProperty.get(property.id) ?? [];
       return {
@@ -127,11 +149,18 @@ export default function Dashboard() {
         b.needsAttentionAssetCount - a.needsAttentionAssetCount ||
         b.activeCount - a.activeCount
     );
-  }, [summary, rows]);
+  }, [scopedSummary, rows]);
 
   return (
     <div>
-      <PageHeader title="Operations" description="What needs attention across your portfolio right now." />
+      <PageHeader
+        title="Operations"
+        description={
+          scopeProperty
+            ? `What needs attention at ${scopeProperty.name} right now.`
+            : "What needs attention across your portfolio right now."
+        }
+      />
 
       {status === "loading" && <SectionSpinner />}
 

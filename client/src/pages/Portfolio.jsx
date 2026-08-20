@@ -1,20 +1,71 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
-import { IconBuilding, IconAlertTriangle } from "../components/icons";
+import CreatePropertyModal from "../components/CreatePropertyModal";
+import { IconBuilding, IconAlertTriangle, IconPlus } from "../components/icons";
 import { getProperties } from "../utils/api";
+import { usePropertyScope } from "../context/PropertyScopeContext";
+import { useAuth } from "../context/AuthContext";
+import { CAPABILITIES } from "../utils/capabilities";
+
+const VIEWS = [
+  { value: "active", label: "Active" },
+  { value: "archived", label: "Archived" },
+  { value: "all", label: "All" },
+];
+
+// Same segmented-control visual language as VendorViewFilter/
+// DocumentViewFilter — Property's Active/Archived/All is its own value set,
+// kept as its own small local control.
+function PropertyViewFilter({ value, onChange }) {
+  return (
+    <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+      {VIEWS.map((view) => (
+        <button
+          key={view.value}
+          type="button"
+          onClick={() => onChange(view.value)}
+          className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+            value === view.value ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          {view.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const EMPTY_STATE_COPY = {
+  active: { title: "No active properties", description: "Properties added to your company will show up here." },
+  archived: { title: "No archived properties", description: "Properties you archive will show up here for historical reference." },
+  all: { title: "No properties yet", description: "Properties added to your company will show up here." },
+};
 
 export default function Portfolio() {
+  const navigate = useNavigate();
+  const { clearPropertyScope } = usePropertyScope();
+  const { hasCapability } = useAuth();
+  const [view, setView] = useState("active");
   const [properties, setProperties] = useState([]);
   const [status, setStatus] = useState("loading"); // "loading" | "error" | "ready"
   const [error, setError] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Portfolio is inherently the all-properties view — arriving here is a
+  // clear, deliberate signal to reset scope, unlike simply navigating to
+  // Dashboard or another global page, which should keep whatever Property
+  // scope was already active.
+  useEffect(() => {
+    clearPropertyScope();
+  }, [clearPropertyScope]);
 
   useEffect(() => {
     let cancelled = false;
 
     setStatus("loading");
-    getProperties()
+    getProperties({ status: view })
       .then((data) => {
         if (cancelled) return;
         setProperties(data);
@@ -29,7 +80,7 @@ export default function Portfolio() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [view]);
 
   return (
     <div>
@@ -37,6 +88,22 @@ export default function Portfolio() {
         title="Portfolio"
         description="All properties across your organization."
       />
+
+      {status === "ready" && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <PropertyViewFilter value={view} onChange={setView} />
+          {hasCapability(CAPABILITIES.PROPERTY_CREATE) && (
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+            >
+              <IconPlus className="h-4 w-4" />
+              Add Property
+            </button>
+          )}
+        </div>
+      )}
 
       {status === "loading" && (
         <div className="flex items-center justify-center rounded-2xl border border-gray-200 bg-white py-24">
@@ -53,12 +120,7 @@ export default function Portfolio() {
       )}
 
       {status === "ready" && properties.length === 0 && (
-        <EmptyState
-          icon={IconBuilding}
-          title="No properties yet"
-          description="Properties added to your company will show up here."
-          actionLabel="Add Property"
-        />
+        <EmptyState icon={IconBuilding} title={EMPTY_STATE_COPY[view].title} description={EMPTY_STATE_COPY[view].description} />
       )}
 
       {status === "ready" && properties.length > 0 && (
@@ -74,7 +136,14 @@ export default function Portfolio() {
                   <IconBuilding className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-gray-900">{property.name}</p>
+                  <p className="truncate text-sm font-medium text-gray-900">
+                    {property.name}
+                    {property.status === "archived" && (
+                      <span className="ml-2 rounded-full bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400 ring-1 ring-inset ring-gray-100">
+                        Archived
+                      </span>
+                    )}
+                  </p>
                   <p className="truncate text-xs text-gray-500">
                     {property.address || "No address on file"}
                   </p>
@@ -88,6 +157,16 @@ export default function Portfolio() {
             </Link>
           ))}
         </div>
+      )}
+
+      {showCreateModal && (
+        <CreatePropertyModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={(created) => {
+            setShowCreateModal(false);
+            navigate(`/portfolio/${created.id}`);
+          }}
+        />
       )}
     </div>
   );

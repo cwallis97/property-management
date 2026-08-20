@@ -7,6 +7,8 @@ import VendorTable from "../components/VendorTable";
 import CreateVendorModal from "../components/CreateVendorModal";
 import { IconAlertTriangle, IconTruck, IconPlus } from "../components/icons";
 import { getVendors } from "../utils/api";
+import { useAuth } from "../context/AuthContext";
+import { CAPABILITIES } from "../utils/capabilities";
 
 const VIEWS = [
   { value: "active", label: "Active" },
@@ -42,6 +44,7 @@ function VendorViewFilter({ value, onChange }) {
 export default function Vendors() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { hasCapability } = useAuth();
   const restored = location.state?.portfolioVendorsState ?? null;
 
   const [view, setView] = useState(restored?.view ?? "active");
@@ -81,14 +84,16 @@ export default function Vendors() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <VendorViewFilter value={view} onChange={setView} />
-        <button
-          type="button"
-          onClick={() => setShowCreateModal(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
-        >
-          <IconPlus className="h-4 w-4" />
-          Add Vendor
-        </button>
+        {hasCapability(CAPABILITIES.VENDOR_CREATE) && (
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+          >
+            <IconPlus className="h-4 w-4" />
+            Add Vendor
+          </button>
+        )}
       </div>
 
       {status === "loading" && <SectionSpinner />}

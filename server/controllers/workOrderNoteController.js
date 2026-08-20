@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import { WorkOrder, WorkOrderNote, Property, User } from "../models/index.js";
+import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_BODY_LENGTH = 4000;
@@ -15,7 +16,7 @@ function isValidUUID(value) {
 async function findOwnedWorkOrder(workOrderId, companyIds) {
   return WorkOrder.findOne({
     where: { id: workOrderId, archivedAt: null },
-    include: { model: Property, as: "property", where: { companyId: { [Op.in]: companyIds } }, attributes: [] },
+    include: { model: Property, as: "property", where: { companyId: { [Op.in]: companyIds } }, attributes: ["companyId"] },
   });
 }
 
@@ -53,6 +54,7 @@ export async function createWorkOrderNote(req, res) {
 
   const workOrder = await findOwnedWorkOrder(req.params.workOrderId, req.companyIds);
   if (!workOrder) return res.status(404).json({ error: "Work order not found." });
+  if (!requireCapability(req, res, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_NOTE_CREATE)) return;
 
   const { body } = req.body;
   if (typeof body !== "string" || !body.trim()) {

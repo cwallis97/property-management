@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { IconSearch } from "./icons";
 import { documentCategoryLabel } from "../utils/documents";
 import { openDocumentFile } from "../utils/api";
+import { useAuth } from "../context/AuthContext";
+import { CAPABILITIES } from "../utils/capabilities";
 
 function formatShortDate(value) {
   return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -13,6 +15,8 @@ const ATTACHMENT_TYPE_LABEL = { property: "Property", asset: "Asset", workOrder:
 // file directly (no Document Detail page); Edit/Archive are separate,
 // explicit small actions — same split as EntityDocuments' compact rows.
 export default function DocumentTable({ rows, onEdit, onArchive }) {
+  const { hasCapability } = useAuth();
+  const canManage = hasCapability(CAPABILITIES.DOCUMENT_MANAGE);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState({ key: "createdAt", direction: "desc" });
 
@@ -106,10 +110,12 @@ export default function DocumentTable({ rows, onEdit, onArchive }) {
                 </td>
                 <td className="px-5 py-3">
                   <div className="flex items-center justify-end gap-2">
-                    <button type="button" onClick={() => onEdit(row)} className="text-xs font-medium text-gray-500 hover:text-gray-900">
-                      Edit
-                    </button>
-                    {!row.archivedAt && (
+                    {canManage && (
+                      <button type="button" onClick={() => onEdit(row)} className="text-xs font-medium text-gray-500 hover:text-gray-900">
+                        Edit
+                      </button>
+                    )}
+                    {canManage && !row.archivedAt && (
                       <button type="button" onClick={() => onArchive(row)} className="text-xs font-medium text-gray-500 hover:text-red-600">
                         Archive
                       </button>

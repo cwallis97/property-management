@@ -25,6 +25,8 @@ import {
   getWorkOrderCosts,
   createWorkOrderCost,
 } from "../utils/api";
+import { useAuth } from "../context/AuthContext";
+import { CAPABILITIES } from "../utils/capabilities";
 
 const COST_TYPES = [
   { value: "labor", label: "Labor" },
@@ -137,6 +139,10 @@ function useFieldSave() {
 export default function WorkOrderDetail() {
   const { propertyId, workOrderId } = useParams();
   const location = useLocation();
+  const { hasCapability } = useAuth();
+  const canEditWorkOrder = hasCapability(CAPABILITIES.WORK_ORDER_EDIT);
+  const canAddNote = hasCapability(CAPABILITIES.WORK_ORDER_NOTE_CREATE);
+  const canAddCost = hasCapability(CAPABILITIES.WORK_ORDER_COST_CREATE);
 
   // Return-to-origin navigation: whoever linked here (Dashboard, a
   // property's Map/Overview/Work Orders tab, etc.) passes where "back"
@@ -495,7 +501,7 @@ export default function WorkOrderDetail() {
           <div className="rounded-2xl border border-gray-200 bg-white p-6">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Description</h2>
-              {!editingDescription && (
+              {!editingDescription && canEditWorkOrder && (
                 <button
                   type="button"
                   onClick={startEditingDescription}
@@ -587,25 +593,27 @@ export default function WorkOrderDetail() {
               </div>
             )}
 
-            <form onSubmit={handleAddNote} className="mt-4">
-              <textarea
-                value={composerValue}
-                onChange={(e) => setComposerValue(e.target.value)}
-                placeholder="Add update..."
-                rows={2}
-                className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
-              />
-              {noteError && <p className="mt-1.5 text-sm text-red-600">{noteError}</p>}
-              <div className="mt-2 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={submittingNote || !composerValue.trim()}
-                  className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {submittingNote ? "Saving…" : "Add Update"}
-                </button>
-              </div>
-            </form>
+            {canAddNote && (
+              <form onSubmit={handleAddNote} className="mt-4">
+                <textarea
+                  value={composerValue}
+                  onChange={(e) => setComposerValue(e.target.value)}
+                  placeholder="Add update..."
+                  rows={2}
+                  className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                />
+                {noteError && <p className="mt-1.5 text-sm text-red-600">{noteError}</p>}
+                <div className="mt-2 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={submittingNote || !composerValue.trim()}
+                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {submittingNote ? "Saving…" : "Add Update"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
 
           {/* COSTS — available regardless of status, including completed:
@@ -644,7 +652,7 @@ export default function WorkOrderDetail() {
               <p className="mb-3 text-sm text-gray-400">No costs recorded yet.</p>
             )}
 
-            {!costFormOpen ? (
+            {!canAddCost ? null : !costFormOpen ? (
               <button
                 type="button"
                 onClick={() => setCostFormOpen(true)}
@@ -743,7 +751,7 @@ export default function WorkOrderDetail() {
 
         <div className="space-y-6">
           <SidebarSection title="Status">
-            {!isCompleted ? (
+            {!isCompleted && canEditWorkOrder ? (
               <div className="flex flex-wrap items-center gap-2">
                 <div className="inline-flex flex-wrap rounded-lg border border-gray-200 bg-gray-50 p-1">
                   {ACTIVE_WORK_ORDER_STATUSES.map((s) => (
@@ -763,9 +771,17 @@ export default function WorkOrderDetail() {
                 {statusSave.phase === "saving" && <span className="text-xs text-gray-400">Saving…</span>}
                 {statusSave.phase === "saved" && <span className="text-xs font-medium text-emerald-600">Saved</span>}
               </div>
-            ) : (
+            ) : isCompleted ? (
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-inset ring-emerald-100">
                 Completed
+              </span>
+            ) : (
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                  statusBadge[workOrder.status] || "bg-gray-50 text-gray-500"
+                }`}
+              >
+                {statusLabel[workOrder.status] || workOrder.status}
               </span>
             )}
             {statusSave.phase === "error" && <p className="mt-1.5 text-xs text-red-600">{statusSave.error}</p>}
@@ -804,7 +820,7 @@ export default function WorkOrderDetail() {
               onChange={applyVendor}
               options={vendorOptions}
               placeholder="No vendor assigned"
-              disabled={vendorSave.phase === "saving"}
+              disabled={!canEditWorkOrder || vendorSave.phase === "saving"}
             />
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               {vendorSave.phase === "saving" && <span className="text-xs text-gray-400">Saving…</span>}
@@ -844,6 +860,7 @@ export default function WorkOrderDetail() {
             {overdue && <p className="text-xs font-medium text-red-600">Overdue</p>}
           </SidebarSection>
 
+          {(canEditWorkOrder || isCompleted) && (
           <SidebarSection title="Action">
             {!isCompleted ? (
               <button
@@ -857,6 +874,7 @@ export default function WorkOrderDetail() {
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-gray-500">Resolved in {resolutionAge}</p>
+                {canEditWorkOrder && (
                 <button
                   type="button"
                   disabled={actionSave.phase === "saving" || statusSave.phase === "saving"}
@@ -865,10 +883,12 @@ export default function WorkOrderDetail() {
                 >
                   {actionSave.phase === "saving" ? "Saving…" : "Reopen"}
                 </button>
+                )}
               </div>
             )}
             {actionSave.phase === "error" && <p className="mt-1.5 text-xs text-red-600">{actionSave.error}</p>}
           </SidebarSection>
+          )}
         </div>
       </div>
     </div>

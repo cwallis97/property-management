@@ -17,8 +17,13 @@ import { Property, Location, Asset, WorkOrder } from "../models/index.js";
 // PropertyDetail/WorkOrderDetail, so the dashboard can never disagree with
 // those pages about what counts as overdue or urgent.
 export async function getDashboardSummary(req, res) {
+  // Archived Properties (and everything under them) are excluded — this is
+  // an active-operations snapshot, and an archived Property has explicitly
+  // been taken out of active operations. Its history remains fully intact
+  // and reachable from its own (still fully inspectable) Property Detail
+  // page; it just doesn't contribute to "what needs attention right now."
   const properties = await Property.findAll({
-    where: { companyId: { [Op.in]: req.companyIds } },
+    where: { companyId: { [Op.in]: req.companyIds }, status: "active" },
     attributes: ["id", "name"],
     order: [["name", "ASC"]],
   });

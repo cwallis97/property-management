@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import { Location, Property } from "../models/index.js";
+import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -14,6 +15,8 @@ async function findOwnedProperty(propertyId, companyIds) {
 // Excludes archived locations by default — archiving hides a location from
 // every normal read/write path the same way a delete would, while keeping
 // the row in the database for future history/reporting features.
+// Selects the parent Property's companyId (not just an empty join filter)
+// so callers can run a capability check against it without a second query.
 async function findOwnedLocation(locationId, companyIds, { includeArchived = false } = {}) {
   const where = { id: locationId };
   if (!includeArchived) where.archivedAt = null;
@@ -24,7 +27,7 @@ async function findOwnedLocation(locationId, companyIds, { includeArchived = fal
       model: Property,
       as: "property",
       where: { companyId: { [Op.in]: companyIds } },
-      attributes: [],
+      attributes: ["companyId"],
     },
   });
 }
@@ -51,6 +54,10 @@ export async function createLocation(req, res) {
 
   const property = await findOwnedProperty(req.params.propertyId, req.companyIds);
   if (!property) return res.status(404).json({ error: "Property not found." });
+  if (!requireCapability(req, res, property.companyId, CAPABILITIES.LOCATION_MANAGE)) return;
+  if (property.status === "archived") {
+    return res.status(400).json({ error: "Cannot add a location to an archived property. Restore it first." });
+  }
 
   const { name, type, parentLocationId } = req.body;
 
@@ -106,6 +113,7 @@ export async function updateLocation(req, res) {
 
   const location = await findOwnedLocation(req.params.id, req.companyIds);
   if (!location) return res.status(404).json({ error: "Location not found." });
+  if (!requireCapability(req, res, location.property.companyId, CAPABILITIES.LOCATION_MANAGE)) return;
 
   const { name, type, parentLocationId } = req.body;
 
@@ -173,6 +181,7 @@ export async function archiveLocation(req, res) {
 
   const location = await findOwnedLocation(req.params.id, req.companyIds);
   if (!location) return res.status(404).json({ error: "Location not found." });
+  if (!requireCapability(req, res, location.property.companyId, CAPABILITIES.LOCATION_MANAGE)) return;
 
   const activeChildCount = await Location.count({
     where: { parentLocationId: location.id, archivedAt: null },

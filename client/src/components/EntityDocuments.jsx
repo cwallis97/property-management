@@ -5,6 +5,8 @@ import EditDocumentModal from "./EditDocumentModal";
 import { IconPlus } from "./icons";
 import { documentCategoryLabel } from "../utils/documents";
 import { getDocuments, archiveDocument, openDocumentFile } from "../utils/api";
+import { useAuth } from "../context/AuthContext";
+import { CAPABILITIES } from "../utils/capabilities";
 
 function formatShortDate(value) {
   return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -19,6 +21,8 @@ function formatShortDate(value) {
 // an Asset does not also appear on that Asset's Property page, matching
 // exactly how the attachment filter works server-side.
 export default function EntityDocuments({ attachment, title = "Documents" }) {
+  const { hasCapability } = useAuth();
+  const canManage = hasCapability(CAPABILITIES.DOCUMENT_MANAGE);
   const [documents, setDocuments] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | error | ready
   const [showAddModal, setShowAddModal] = useState(false);
@@ -61,14 +65,16 @@ export default function EntityDocuments({ attachment, title = "Documents" }) {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400">{title}</h2>
-        <button
-          type="button"
-          onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 transition hover:text-gray-900"
-        >
-          <IconPlus className="h-3.5 w-3.5" />
-          Add Document
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 transition hover:text-gray-900"
+          >
+            <IconPlus className="h-3.5 w-3.5" />
+            Add Document
+          </button>
+        )}
       </div>
 
       {status === "loading" && <SectionSpinner />}
@@ -90,22 +96,24 @@ export default function EntityDocuments({ attachment, title = "Documents" }) {
                   {documentCategoryLabel[doc.category] || doc.category} · {formatShortDate(doc.createdAt)}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  onClick={() => setEditingDocument(doc)}
-                  className="text-xs font-medium text-gray-500 transition hover:text-gray-900"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleArchive(doc)}
-                  className="text-xs font-medium text-gray-500 transition hover:text-red-600"
-                >
-                  Archive
-                </button>
-              </div>
+              {canManage && (
+                <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => setEditingDocument(doc)}
+                    className="text-xs font-medium text-gray-500 transition hover:text-gray-900"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleArchive(doc)}
+                    className="text-xs font-medium text-gray-500 transition hover:text-red-600"
+                  >
+                    Archive
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>

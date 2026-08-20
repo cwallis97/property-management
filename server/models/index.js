@@ -2,7 +2,7 @@ import { sequelize } from "../db/sequelize.js";
 import { initUserModel, User } from "./User.js";
 import { initCompanyModel, Company } from "./Company.js";
 import { initMembershipModel, Membership, MEMBERSHIP_ROLES } from "./Membership.js";
-import { initPropertyModel, Property } from "./Property.js";
+import { initPropertyModel, Property, PROPERTY_STATUSES } from "./Property.js";
 import { initPinModel, Pin, PIN_TYPES } from "./Pin.js";
 import { initRepairModel, Repair, SEVERITY_LEVELS, REPAIR_STATUSES } from "./Repair.js";
 import { initLocationModel, Location } from "./Location.js";
@@ -20,6 +20,7 @@ import { initWorkOrderCostEntryModel, WorkOrderCostEntry, WORK_ORDER_COST_TYPES 
 import { initVendorModel, Vendor, VENDOR_STATUSES } from "./Vendor.js";
 import { initWorkOrderVendorModel, WorkOrderVendor } from "./WorkOrderVendor.js";
 import { initDocumentModel, Document, DOCUMENT_CATEGORIES, DOCUMENT_ALLOWED_MIME_TYPES } from "./Document.js";
+import { initInvitationModel, Invitation, INVITE_ROLES } from "./Invitation.js";
 
 initUserModel(sequelize);
 initCompanyModel(sequelize);
@@ -37,6 +38,7 @@ initWorkOrderCostEntryModel(sequelize);
 initVendorModel(sequelize);
 initWorkOrderVendorModel(sequelize);
 initDocumentModel(sequelize);
+initInvitationModel(sequelize);
 
 User.belongsToMany(Company, { through: Membership, foreignKey: "userId", otherKey: "companyId", as: "companies" });
 Company.belongsToMany(User, { through: Membership, foreignKey: "companyId", otherKey: "userId", as: "users" });
@@ -160,12 +162,23 @@ Document.belongsTo(Vendor, { foreignKey: "vendorId", as: "vendor" });
 User.hasMany(Document, { foreignKey: "uploadedByUserId", as: "documents", onDelete: "SET NULL" });
 Document.belongsTo(User, { foreignKey: "uploadedByUserId", as: "uploadedBy" });
 
+// Invitation is Company-scoped directly, same shape as Vendor/Document —
+// CASCADE, since an invitation has no independent meaning once its Company
+// is gone. invitedByUserId is RESTRICT: who created an invitation is part
+// of its audit trail and is never silently orphaned.
+Company.hasMany(Invitation, { foreignKey: "companyId", as: "invitations", onDelete: "CASCADE" });
+Invitation.belongsTo(Company, { foreignKey: "companyId", as: "company" });
+
+User.hasMany(Invitation, { foreignKey: "invitedByUserId", as: "sentInvitations", onDelete: "RESTRICT" });
+Invitation.belongsTo(User, { foreignKey: "invitedByUserId", as: "invitedBy" });
+
 export {
   sequelize,
   User,
   Company,
   Membership,
   Property,
+  PROPERTY_STATUSES,
   Pin,
   Repair,
   Location,
@@ -191,4 +204,6 @@ export {
   ASSET_STATUSES,
   WORK_ORDER_STATUSES,
   WORK_ORDER_PRIORITIES,
+  Invitation,
+  INVITE_ROLES,
 };

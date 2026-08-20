@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import { Document, Property, Asset, WorkOrder, Vendor, User, DOCUMENT_CATEGORIES, DOCUMENT_ALLOWED_MIME_TYPES } from "../models/index.js";
 import { saveDocumentFile, deleteDocumentFile, getFilePath, acceptedExtensionsForMimeType } from "../utils/documentStorage.js";
+import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ATTACHMENT_FIELDS = ["propertyId", "assetId", "workOrderId", "vendorId"];
@@ -184,6 +185,7 @@ export async function createDocument(req, res) {
   // discipline as sitePlanController.
   const { attachment, error: attachmentError } = await resolveAttachmentTarget(req.body, req.companyIds);
   if (attachmentError) return res.status(attachmentError.status).json(attachmentError.body);
+  if (!requireCapability(req, res, attachment.companyId, CAPABILITIES.DOCUMENT_MANAGE)) return;
 
   const storedFilename = await saveDocumentFile(req.file.buffer, req.file.mimetype);
 
@@ -209,6 +211,7 @@ export async function updateDocument(req, res) {
   }
   const document = await findOwnedDocument(req.params.id, req.companyIds);
   if (!document) return res.status(404).json({ error: "Document not found." });
+  if (!requireCapability(req, res, document.companyId, CAPABILITIES.DOCUMENT_MANAGE)) return;
 
   const { name, category, notes } = req.body;
 
@@ -247,6 +250,7 @@ export async function replaceDocumentFile(req, res) {
   }
   const document = await findOwnedDocument(req.params.id, req.companyIds);
   if (!document) return res.status(404).json({ error: "Document not found." });
+  if (!requireCapability(req, res, document.companyId, CAPABILITIES.DOCUMENT_MANAGE)) return;
 
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded." });
@@ -286,6 +290,7 @@ export async function archiveDocument(req, res) {
   }
   const document = await findOwnedDocument(req.params.id, req.companyIds);
   if (!document) return res.status(404).json({ error: "Document not found." });
+  if (!requireCapability(req, res, document.companyId, CAPABILITIES.DOCUMENT_MANAGE)) return;
 
   document.archivedAt = new Date();
   await document.save();

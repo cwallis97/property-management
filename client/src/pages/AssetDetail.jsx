@@ -2,12 +2,15 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import EmptyState from "../components/EmptyState";
 import SectionSpinner from "../components/SectionSpinner";
+import EditAssetModal from "../components/EditAssetModal";
 import { IconAlertTriangle, IconArrowLeft, IconWrench } from "../components/icons";
 import { priorityBadge, statusBadge as woStatusBadge, statusLabel } from "../components/WorkOrderTable";
 import { statusBadge as assetStatusBadge } from "../components/AssetTable";
 import EntityDocuments from "../components/EntityDocuments";
 import { formatAge, isOverdue, ACTIVE_WORK_ORDER_STATUSES, categoryLabel } from "../utils/workOrders";
 import { getAsset } from "../utils/api";
+import { useAuth } from "../context/AuthContext";
+import { CAPABILITIES } from "../utils/capabilities";
 
 function formatMoney(amount) {
   return `$${Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -51,6 +54,7 @@ function Stat({ label, value, accent }) {
 export default function AssetDetail() {
   const { propertyId, assetId } = useParams();
   const location = useLocation();
+  const { hasCapability } = useAuth();
 
   // Same return-to-origin navigation as WorkOrderDetail: whoever linked
   // here (Property's Assets tab, eventually Portfolio Assets, or a Work
@@ -63,6 +67,7 @@ export default function AssetDetail() {
   const [asset, setAsset] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | error | not-found | ready
   const [error, setError] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,6 +90,15 @@ export default function AssetDetail() {
       cancelled = true;
     };
   }, [assetId]);
+
+  // updateAsset's response is the bare Asset row, not this page's enriched
+  // shape (property/location/workOrders/lifetimeSpend) — refetching after a
+  // successful save is the simplest way to get a fully consistent view back,
+  // rather than hand-merging a partial response into existing state.
+  function handleUpdated() {
+    setShowEditModal(false);
+    getAsset(assetId).then(setAsset);
+  }
 
   if (status === "loading") {
     return (
@@ -133,22 +147,33 @@ export default function AssetDetail() {
     <div>
       <BackLink to={backTo} state={backTabState} label={backLabel} />
 
-      <div className="mb-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{asset.name}</h1>
-          <span
-            className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
-              assetStatusBadge[asset.status] || "bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-100"
-            }`}
-          >
-            {asset.status.replace("-", " ")}
-          </span>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{asset.name}</h1>
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
+                assetStatusBadge[asset.status] || "bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-100"
+              }`}
+            >
+              {asset.status.replace("-", " ")}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            {asset.property?.name}
+            {asset.location && ` · ${asset.location.name}`}
+            {asset.category && ` · ${asset.category}`}
+          </p>
         </div>
-        <p className="mt-1 text-sm text-gray-500">
-          {asset.property?.name}
-          {asset.location && ` · ${asset.location.name}`}
-          {asset.category && ` · ${asset.category}`}
-        </p>
+        {hasCapability(CAPABILITIES.ASSET_EDIT) && (
+          <button
+            type="button"
+            onClick={() => setShowEditModal(true)}
+            className="shrink-0 text-xs font-medium text-gray-500 transition hover:text-gray-900"
+          >
+            Edit Asset
+          </button>
+        )}
       </div>
 
       <div className="mb-8 grid grid-cols-1 divide-x divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white sm:grid-cols-3 sm:divide-y-0">
@@ -249,6 +274,10 @@ export default function AssetDetail() {
       <div className="mt-8">
         <EntityDocuments attachment={{ assetId }} />
       </div>
+
+      {showEditModal && (
+        <EditAssetModal asset={asset} onClose={() => setShowEditModal(false)} onUpdated={handleUpdated} />
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import SearchableSelect from "../components/SearchableSelect";
 import AssetTable from "../components/AssetTable";
 import { IconAlertTriangle, IconBox } from "../components/icons";
 import { getPortfolioAssets, getProperties } from "../utils/api";
+import { usePropertyScope } from "../context/PropertyScopeContext";
 
 const VIEWS = [
   { value: "all", label: "All" },
@@ -45,9 +46,14 @@ export default function Assets() {
   const location = useLocation();
   const navigate = useNavigate();
   const restored = location.state?.portfolioAssetsState ?? null;
+  // Explicit return-to-origin state wins if present (unchanged); otherwise
+  // this page's filter starts wherever the app's current Property scope is.
+  // After this initial mount the filter is fully independent local state —
+  // changing it here never writes back to global scope.
+  const { propertyId: scopePropertyId } = usePropertyScope();
 
   const [view, setView] = useState(restored?.view ?? "all");
-  const [propertyFilterId, setPropertyFilterId] = useState(restored?.propertyId ?? null);
+  const [propertyFilterId, setPropertyFilterId] = useState(restored?.propertyId ?? scopePropertyId ?? null);
 
   const [properties, setProperties] = useState([]);
   useEffect(() => {

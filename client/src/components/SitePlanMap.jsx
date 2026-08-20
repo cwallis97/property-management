@@ -9,6 +9,8 @@ import { priorityBadge, statusBadge, statusLabel } from "./WorkOrderTable";
 import { getSitePlan, uploadSitePlan } from "../utils/api";
 import { useSitePlanFile } from "../utils/useSitePlanFile";
 import { needsAttention, resolveWorkOrderContext } from "../utils/workOrders";
+import { useAuth } from "../context/AuthContext";
+import { CAPABILITIES } from "../utils/capabilities";
 
 const ACCEPTED_MIME_TYPES = ["application/pdf", "image/png", "image/jpeg"];
 const ACCEPTED_ACCEPT_ATTR = ".pdf,.png,.jpg,.jpeg";
@@ -24,6 +26,9 @@ function markerTone(workOrder) {
 }
 
 export default function SitePlanMap({ propertyId, locations, assets, workOrders, onWorkOrderCreated }) {
+  const { hasCapability } = useAuth();
+  const canUploadSitePlan = hasCapability(CAPABILITIES.SITE_PLAN_UPLOAD);
+  const canCreateWorkOrder = hasCapability(CAPABILITIES.WORK_ORDER_CREATE);
   const [sitePlanStatus, setSitePlanStatus] = useState("loading"); // loading | none | error | ready
   const [sitePlan, setSitePlan] = useState(null);
 
@@ -180,26 +185,32 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center">
         <h2 className="text-base font-semibold text-gray-900">Set Up Property Map</h2>
         <p className="mt-2 max-w-md text-sm text-gray-500">
-          Upload the overhead site plan, property map, or aerial image your team already uses.
+          {canUploadSitePlan
+            ? "Upload the overhead site plan, property map, or aerial image your team already uses."
+            : "No site plan has been uploaded for this property yet."}
         </p>
-        <p className="mt-1 text-xs text-gray-400">Accepted: PDF, PNG, JPG</p>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPTED_ACCEPT_ATTR}
-          className="hidden"
-          onChange={(e) => handleFileChosen(e.target.files?.[0])}
-        />
-        <button
-          type="button"
-          disabled={uploading}
-          onClick={() => fileInputRef.current?.click()}
-          className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {uploading ? "Uploading…" : "Upload Site Plan"}
-        </button>
-        {uploadError && <p className="mt-3 text-sm text-red-600">{uploadError}</p>}
+        {canUploadSitePlan && (
+          <>
+            <p className="mt-1 text-xs text-gray-400">Accepted: PDF, PNG, JPG</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_ACCEPT_ATTR}
+              className="hidden"
+              onChange={(e) => handleFileChosen(e.target.files?.[0])}
+            />
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {uploading ? "Uploading…" : "Upload Site Plan"}
+            </button>
+            {uploadError && <p className="mt-3 text-sm text-red-600">{uploadError}</p>}
+          </>
+        )}
       </div>
     );
   }
@@ -207,36 +218,44 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setReportIssueMode((v) => !v);
-            setPendingPoint(null);
-            setSelectedWorkOrderId(null);
-          }}
-          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-            reportIssueMode ? "bg-gray-900 text-white" : "border border-gray-200 text-gray-700 hover:bg-gray-50"
-          }`}
-        >
-          <IconPlus className="h-4 w-4" />
-          {reportIssueMode ? "Click the map to report…" : "Report Issue"}
-        </button>
+        {canCreateWorkOrder ? (
+          <button
+            type="button"
+            onClick={() => {
+              setReportIssueMode((v) => !v);
+              setPendingPoint(null);
+              setSelectedWorkOrderId(null);
+            }}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+              reportIssueMode ? "bg-gray-900 text-white" : "border border-gray-200 text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <IconPlus className="h-4 w-4" />
+            {reportIssueMode ? "Click the map to report…" : "Report Issue"}
+          </button>
+        ) : (
+          <span />
+        )}
 
-        <input
-          ref={replaceInputRef}
-          type="file"
-          accept={ACCEPTED_ACCEPT_ATTR}
-          className="hidden"
-          onChange={(e) => handleFileChosen(e.target.files?.[0])}
-        />
-        <button
-          type="button"
-          disabled={uploading}
-          onClick={() => replaceInputRef.current?.click()}
-          className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {uploading ? "Uploading…" : "Replace site plan"}
-        </button>
+        {canUploadSitePlan && (
+          <>
+            <input
+              ref={replaceInputRef}
+              type="file"
+              accept={ACCEPTED_ACCEPT_ATTR}
+              className="hidden"
+              onChange={(e) => handleFileChosen(e.target.files?.[0])}
+            />
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => replaceInputRef.current?.click()}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {uploading ? "Uploading…" : "Replace site plan"}
+            </button>
+          </>
+        )}
       </div>
 
       {uploadError && <p className="mb-3 text-sm text-red-600">{uploadError}</p>}

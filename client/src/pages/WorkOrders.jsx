@@ -8,6 +8,7 @@ import WorkOrderTable from "../components/WorkOrderTable";
 import WorkOrderViewFilter from "../components/WorkOrderViewFilter";
 import { IconAlertTriangle, IconWrench } from "../components/icons";
 import { getPortfolioWorkOrders, getProperties } from "../utils/api";
+import { usePropertyScope } from "../context/PropertyScopeContext";
 import { formatAge, isOverdue, compareByAttention, filterWorkOrdersByView } from "../utils/workOrders";
 
 // Portfolio-wide operational queue: "across all of my properties, what
@@ -25,9 +26,14 @@ export default function WorkOrders() {
   // "back to origin" flow in the app (PropertyDetail's tab, Reports' drill
   // state), never browser history.
   const restored = location.state?.portfolioWorkOrdersState ?? null;
+  // Same rule as Portfolio Assets: explicit return-to-origin state wins if
+  // present, otherwise seed from the app's current Property scope. Fully
+  // independent local state after that — this page's filter never writes
+  // back to global scope.
+  const { propertyId: scopePropertyId } = usePropertyScope();
 
   const [view, setView] = useState(restored?.view ?? "active");
-  const [propertyFilterId, setPropertyFilterId] = useState(restored?.propertyId ?? null);
+  const [propertyFilterId, setPropertyFilterId] = useState(restored?.propertyId ?? scopePropertyId ?? null);
 
   const [properties, setProperties] = useState([]);
   useEffect(() => {

@@ -10,6 +10,7 @@ import {
   WorkType,
   VENDOR_STATUSES,
 } from "../models/index.js";
+import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -92,6 +93,7 @@ export async function listVendorsForCompany(req, res) {
 export async function createVendor(req, res) {
   const { error, values } = validateScalarFields(req.body, { partial: false });
   if (error) return res.status(error.status).json(error.body);
+  if (!requireCapability(req, res, req.companyIds[0], CAPABILITIES.VENDOR_CREATE)) return;
 
   // A Vendor always belongs to exactly one of the caller's own companies —
   // req.companyIds[0] mirrors the same "current company" assumption
@@ -118,6 +120,7 @@ export async function updateVendor(req, res) {
 
   const vendor = await findOwnedVendor(req.params.id, req.companyIds);
   if (!vendor) return res.status(404).json({ error: "Vendor not found." });
+  if (!requireCapability(req, res, vendor.companyId, CAPABILITIES.VENDOR_EDIT)) return;
 
   const { error, values } = validateScalarFields(req.body, { partial: true });
   if (error) return res.status(error.status).json(error.body);

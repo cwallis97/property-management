@@ -5,6 +5,7 @@ import { sequelize } from "./models/index.js";
 import propertyRoutes from "./routes/propertyRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import companyRoutes from "./routes/companyRoutes.js";
+import membershipRoutes from "./routes/membershipRoutes.js";
 import { pinRouter, repairRouter, locationRouter, assetRouter, workOrderRouter } from "./routes/detailRoutes.js";
 import workOrderNoteRoutes from "./routes/workOrderNoteRoutes.js";
 import workOrderCostRoutes from "./routes/workOrderCostRoutes.js";
@@ -13,6 +14,7 @@ import vendorRoutes from "./routes/vendorRoutes.js";
 import documentRoutes from "./routes/documentRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
+import inviteRoutes from "./routes/inviteRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { ensureUploadDir as ensureSitePlanUploadDir } from "./utils/sitePlanStorage.js";
 import { ensureUploadDir as ensureDocumentUploadDir } from "./utils/documentStorage.js";
@@ -38,6 +40,8 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/companies", companyRoutes);
+app.use("/api/members", membershipRoutes);
+app.use("/api/invites", inviteRoutes);
 
 app.use(errorHandler);
 
