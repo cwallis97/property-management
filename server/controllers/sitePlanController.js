@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import { Property, SitePlan, WorkOrder, SITE_PLAN_ALLOWED_MIME_TYPES } from "../models/index.js";
 import { saveSitePlanFile, deleteSitePlanFile, getFilePath, acceptedExtensionsForMimeType } from "../utils/sitePlanStorage.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
+import { requirePropertyAccess } from "../authorization/propertyAccess.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -30,6 +31,7 @@ function originalFilenameExtensionMatches(originalname, mimeType) {
 export async function uploadSitePlan(req, res) {
   const property = await findOwnedProperty(req.params.propertyId, req.companyIds);
   if (!property) return res.status(404).json({ error: "Property not found." });
+  if (!(await requirePropertyAccess(req, res, property.companyId, property.id))) return;
   if (!requireCapability(req, res, property.companyId, CAPABILITIES.SITE_PLAN_UPLOAD)) return;
 
   if (!req.file) {
@@ -79,6 +81,7 @@ export async function uploadSitePlan(req, res) {
 export async function getSitePlan(req, res) {
   const property = await findOwnedProperty(req.params.propertyId, req.companyIds);
   if (!property) return res.status(404).json({ error: "Property not found." });
+  if (!(await requirePropertyAccess(req, res, property.companyId, property.id))) return;
 
   const sitePlan = await SitePlan.findOne({ where: { propertyId: property.id } });
   if (!sitePlan) return res.status(404).json({ error: "No site plan uploaded for this property." });
@@ -89,6 +92,7 @@ export async function getSitePlan(req, res) {
 export async function getSitePlanFile(req, res) {
   const property = await findOwnedProperty(req.params.propertyId, req.companyIds);
   if (!property) return res.status(404).json({ error: "Property not found." });
+  if (!(await requirePropertyAccess(req, res, property.companyId, property.id))) return;
 
   const sitePlan = await SitePlan.findOne({ where: { propertyId: property.id } });
   if (!sitePlan) return res.status(404).json({ error: "No site plan uploaded for this property." });

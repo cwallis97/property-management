@@ -3,10 +3,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import SectionSpinner from "../components/SectionSpinner";
-import SearchableSelect from "../components/SearchableSelect";
 import AssetTable from "../components/AssetTable";
 import { IconAlertTriangle, IconBox } from "../components/icons";
-import { getPortfolioAssets, getProperties } from "../utils/api";
+import { getPortfolioAssets } from "../utils/api";
 import { usePropertyScope } from "../context/PropertyScopeContext";
 
 const VIEWS = [
@@ -42,28 +41,19 @@ function AssetViewFilter({ value, onChange }) {
 // where are they, and which need attention?" This page is for finding the
 // physical thing — Asset Detail (opened by clicking a row) is for
 // understanding it.
+//
+// Property filtering is the global Property Scope selector (Sidebar), not
+// a second control here — a page-local Property dropdown would just be a
+// second source of truth that could disagree with it. This page
+// live-follows scope: changing it while Assets is mounted re-filters
+// immediately, since scopePropertyId comes straight from context.
 export default function Assets() {
   const location = useLocation();
   const navigate = useNavigate();
   const restored = location.state?.portfolioAssetsState ?? null;
-  // Explicit return-to-origin state wins if present (unchanged); otherwise
-  // this page's filter starts wherever the app's current Property scope is.
-  // After this initial mount the filter is fully independent local state —
-  // changing it here never writes back to global scope.
   const { propertyId: scopePropertyId } = usePropertyScope();
 
   const [view, setView] = useState(restored?.view ?? "all");
-  const [propertyFilterId, setPropertyFilterId] = useState(restored?.propertyId ?? scopePropertyId ?? null);
-
-  const [properties, setProperties] = useState([]);
-  useEffect(() => {
-    getProperties()
-      .then(setProperties)
-      .catch(() => {
-        // The property filter just won't populate — the list itself still
-        // works unfiltered.
-      });
-  }, []);
 
   const [assets, setAssets] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | error | ready
@@ -103,19 +93,13 @@ export default function Assets() {
   );
 
   const visibleRows = useMemo(() => {
-    let rows = propertyFilterId ? assetRows.filter((row) => row.propertyId === propertyFilterId) : assetRows;
+    let rows = scopePropertyId ? assetRows.filter((row) => row.propertyId === scopePropertyId) : assetRows;
     if (view === "needs-attention") rows = rows.filter((row) => row.status === "needs-attention");
     else if (view === "critical") rows = rows.filter((row) => row.status === "critical");
     return rows;
-  }, [assetRows, propertyFilterId, view]);
+  }, [assetRows, scopePropertyId, view]);
 
-  const propertyOptions = useMemo(() => {
-    const options = [{ value: null, label: "All Properties", sublabel: null }];
-    for (const p of properties) options.push({ value: p.id, label: p.name, sublabel: null });
-    return options;
-  }, [properties]);
-
-  const portfolioAssetsState = { view, propertyId: propertyFilterId };
+  const portfolioAssetsState = { view };
 
   return (
     <div>
@@ -123,14 +107,6 @@ export default function Assets() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <AssetViewFilter value={view} onChange={setView} />
-        <div className="w-56">
-          <SearchableSelect
-            value={propertyFilterId}
-            onChange={setPropertyFilterId}
-            options={propertyOptions}
-            placeholder="All Properties"
-          />
-        </div>
       </div>
 
       {status === "loading" && <SectionSpinner />}
@@ -155,14 +131,14 @@ export default function Assets() {
         <EmptyState
           icon={IconBox}
           title={view === "all" ? "No assets match this filter" : "Nothing here right now"}
-          description="Adjust the property filter or condition view above."
+          description="Adjust the property scope or condition view above."
         />
       )}
 
       {status === "ready" && visibleRows.length > 0 && (
         <AssetTable
           rows={visibleRows}
-          showPropertyContext
+          showPropertyContext={!scopePropertyId}
           onRowClick={(id) => {
             const row = visibleRows.find((r) => r.id === id);
             if (!row) return;

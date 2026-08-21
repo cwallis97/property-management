@@ -13,6 +13,7 @@ import {
 } from "../models/index.js";
 import { resolveVendorId } from "./vendorController.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
+import { getAccessiblePropertyIds, requirePropertyAccess } from "../authorization/propertyAccess.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -242,6 +243,7 @@ export async function listWorkOrdersForProperty(req, res) {
 
   const property = await findOwnedProperty(req.params.propertyId, req.companyIds);
   if (!property) return res.status(404).json({ error: "Property not found." });
+  if (!(await requirePropertyAccess(req, res, property.companyId, property.id))) return;
 
   const workOrders = await WorkOrder.findAll({
     where: { propertyId: property.id, archivedAt: null },
@@ -269,7 +271,14 @@ export async function listWorkOrdersForCompany(req, res) {
 
   if (properties.length === 0) return res.json([]);
 
-  const propertyIds = properties.map((p) => p.id);
+  let propertyIds = properties.map((p) => p.id);
+
+  const accessiblePropertyIds = await getAccessiblePropertyIds(req, req.companyIds[0]);
+  if (accessiblePropertyIds) {
+    const accessibleSet = new Set(accessiblePropertyIds);
+    propertyIds = propertyIds.filter((id) => accessibleSet.has(id));
+  }
+  if (propertyIds.length === 0) return res.json([]);
 
   const workOrders = await WorkOrder.findAll({
     where: { propertyId: { [Op.in]: propertyIds }, archivedAt: null },
@@ -296,6 +305,7 @@ export async function createWorkOrder(req, res) {
 
   const property = await findOwnedProperty(req.params.propertyId, req.companyIds);
   if (!property) return res.status(404).json({ error: "Property not found." });
+  if (!(await requirePropertyAccess(req, res, property.companyId, property.id))) return;
   if (!requireCapability(req, res, property.companyId, CAPABILITIES.WORK_ORDER_CREATE)) return;
   if (property.status === "archived") {
     return res.status(400).json({ error: "Cannot add a work order to an archived property. Restore it first." });
@@ -380,6 +390,7 @@ export async function getWorkOrder(req, res) {
 
   const workOrder = await findOwnedWorkOrder(req.params.id, req.companyIds);
   if (!workOrder) return res.status(404).json({ error: "Work order not found." });
+  if (!(await requirePropertyAccess(req, res, workOrder.property.companyId, workOrder.propertyId))) return;
 
   // totalCost is always derived from the real cost entries, never a
   // stored/editable number — a single aggregate query alongside the normal
@@ -407,6 +418,7 @@ export async function updateWorkOrder(req, res) {
 
   const workOrder = await findOwnedWorkOrder(req.params.id, req.companyIds);
   if (!workOrder) return res.status(404).json({ error: "Work order not found." });
+  if (!(await requirePropertyAccess(req, res, workOrder.property.companyId, workOrder.propertyId))) return;
   if (!requireCapability(req, res, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_EDIT)) return;
 
   const { error: scalarError, values } = validateScalarFields(req.body);
@@ -556,6 +568,7 @@ export async function archiveWorkOrder(req, res) {
 
   const workOrder = await findOwnedWorkOrder(req.params.id, req.companyIds);
   if (!workOrder) return res.status(404).json({ error: "Work order not found." });
+  if (!(await requirePropertyAccess(req, res, workOrder.property.companyId, workOrder.propertyId))) return;
   if (!requireCapability(req, res, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_EDIT)) return;
 
   workOrder.archivedAt = new Date();

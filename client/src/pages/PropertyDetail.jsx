@@ -65,7 +65,7 @@ export default function PropertyDetail() {
   const { propertyId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { setPropertyScope } = usePropertyScope();
+  const { propertyId: scopePropertyId, setPropertyScope } = usePropertyScope();
   const { hasCapability } = useAuth();
   // Returning from a Work Order's detail page passes back which tab to
   // land on (see WorkOrderDetail's back link), so the user doesn't lose
@@ -193,6 +193,33 @@ export default function PropertyDetail() {
       cancelled = true;
     };
   }, [propertyId, setPropertyScope]);
+
+  // The reverse of the effect above: that one sets scope TO this route's
+  // Property once it loads (so afterward scopePropertyId === propertyId,
+  // and this effect is a no-op). This one reacts when scope later diverges
+  // from the route for a DIFFERENT reason — the user changed the global
+  // selector while still sitting on this page — and treats that as a
+  // request to switch context entirely: jump straight to the newly
+  // selected Property's own Detail page, or back to the Portfolio
+  // directory if scope cleared to All Properties. Gated on
+  // propertyStatus === "ready" specifically so this can never fire before
+  // the effect above has had its first chance to reconcile scope with the
+  // route (e.g. arriving here with a stale scope value left over from
+  // wherever the user was before) — without that gate this would
+  // misfire once on mount and immediately navigate away from a page that
+  // hasn't even finished loading yet. replace: true intentionally does not
+  // add a browser-history entry — this is a side effect of changing a
+  // filter-like control, not a deliberate click, so Back should return to
+  // wherever the user was before landing on this Property, not bounce
+  // through every Property the selector happened to pass through.
+  useEffect(() => {
+    if (propertyStatus !== "ready") return;
+    if (!scopePropertyId) {
+      navigate("/portfolio", { replace: true });
+    } else if (scopePropertyId !== propertyId) {
+      navigate(`/portfolio/${scopePropertyId}`, { replace: true });
+    }
+  }, [scopePropertyId, propertyStatus, propertyId, navigate]);
 
   // Resolves each asset's locationId to a display label using the
   // already-loaded Locations list — no per-asset requests. If Locations

@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import { Property, Pin, PROPERTY_STATUSES } from "../models/index.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
+import { getAccessiblePropertyIds, requirePropertyAccess } from "../authorization/propertyAccess.js";
 
 // Defaults to active-only — the same "archived is excluded unless asked
 // for" convention every other list-with-archive-state endpoint in this app
@@ -19,6 +20,14 @@ export async function listProperties(req, res) {
   const where = { companyId: { [Op.in]: req.companyIds } };
   if (status === undefined) where.status = "active";
   else if (status !== "all") where.status = status;
+
+  // Same single-current-company assumption already used by Vendor
+  // creation, Membership listing, and Invitation creation elsewhere in
+  // this app (req.companyIds[0]) — Property Access is per-Membership, and
+  // nothing in the product yet distinguishes between multiple companies
+  // for one user.
+  const accessiblePropertyIds = await getAccessiblePropertyIds(req, req.companyIds[0]);
+  if (accessiblePropertyIds) where.id = { [Op.in]: accessiblePropertyIds };
 
   const properties = await Property.findAll({
     where,
@@ -56,6 +65,7 @@ export async function getProperty(req, res) {
   });
 
   if (!property) return res.status(404).json({ error: "Property not found." });
+  if (!(await requirePropertyAccess(req, res, property.companyId, property.id))) return;
   res.json(property);
 }
 
@@ -70,6 +80,7 @@ export async function updateProperty(req, res) {
     where: { id: req.params.id, companyId: { [Op.in]: req.companyIds } },
   });
   if (!property) return res.status(404).json({ error: "Property not found." });
+  if (!(await requirePropertyAccess(req, res, property.companyId, property.id))) return;
   if (!requireCapability(req, res, property.companyId, CAPABILITIES.PROPERTY_LIFECYCLE)) return;
 
   const { name, address, sitePlanUrl, status } = req.body;
@@ -101,6 +112,7 @@ export async function deleteProperty(req, res) {
     where: { id: req.params.id, companyId: { [Op.in]: req.companyIds } },
   });
   if (!property) return res.status(404).json({ error: "Property not found." });
+  if (!(await requirePropertyAccess(req, res, property.companyId, property.id))) return;
   if (!requireCapability(req, res, property.companyId, CAPABILITIES.PROPERTY_LIFECYCLE)) return;
 
   await property.destroy();

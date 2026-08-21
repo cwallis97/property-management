@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import SectionSpinner from "../components/SectionSpinner";
-import SearchableSelect from "../components/SearchableSelect";
 import ReportSpendMap from "../components/ReportSpendMap";
 import { statusBadge, statusLabel } from "../components/WorkOrderTable";
 import { IconAlertTriangle, IconWrench } from "../components/icons";
-import { getProperties, getMaintenanceSpendSummary, getMaintenanceSpendWorkOrders } from "../utils/api";
+import { getMaintenanceSpendSummary, getMaintenanceSpendWorkOrders } from "../utils/api";
+import { usePropertyScope } from "../context/PropertyScopeContext";
 
 const RANGE_OPTIONS = [
   { value: "last_30_days", label: "Last 30 Days" },
@@ -63,16 +63,29 @@ function StatTile({ label, value }) {
   );
 }
 
+// Property filtering is the global Property Scope selector (Sidebar), not
+// a second control here. Entering Reports while Riverbend is selected
+// begins the report in Riverbend context for free (filterParams reads
+// scopePropertyId directly); changing scope while Reports stays mounted
+// re-filters immediately. Because a Category/Work Type drill-down is only
+// meaningful within the property context it was drilled into, an actual
+// scope CHANGE (not the initial mount, which may be restoring a real
+// "back" state — see the ref below) resets the drill back to the root
+// breakdown, the same way goToRoot() already does when a user clicks
+// "Maintenance Spend" in the breadcrumb.
 export default function Reports() {
   const location = useLocation();
   // Returning from a Work Order opened out of this report restores exactly
   // where the user left off — same router-state pattern already used for
   // every other "back to origin" flow in the app, not a URL/query-param
-  // scheme or browser history.
+  // scheme or browser history. Property is no longer part of this restored
+  // state: it's tracked globally now, and nothing on the round trip to a
+  // Work Order and back ever changes scope, so it's already exactly what
+  // it was when the user left.
   const restored = location.state?.reportState ?? null;
+  const { propertyId: scopePropertyId } = usePropertyScope();
 
   const [rangeKey, setRangeKey] = useState(restored?.rangeKey ?? "last_12_months");
-  const [propertyId, setPropertyId] = useState(restored?.propertyId ?? null);
   const [category, setCategory] = useState(restored?.category ?? null);
   const [categoryLabelText, setCategoryLabelText] = useState(restored?.categoryLabel ?? null);
   const [workTypeId, setWorkTypeId] = useState(restored?.workTypeId ?? null);
@@ -83,16 +96,6 @@ export default function Reports() {
   // Properties, or drilling back up to Category).
   const [viewMode, setViewMode] = useState(restored?.viewMode ?? "list");
 
-  const [properties, setProperties] = useState([]);
-  useEffect(() => {
-    getProperties()
-      .then(setProperties)
-      .catch(() => {
-        // The property filter just won't populate — the report itself
-        // still works scoped to All Properties.
-      });
-  }, []);
-
   const [data, setData] = useState(null);
   const [dataStatus, setDataStatus] = useState("loading"); // loading | error | ready
 
@@ -102,8 +105,8 @@ export default function Reports() {
   const { startDate, endDate } = useMemo(() => resolveRange(rangeKey), [rangeKey]);
 
   const filterParams = useMemo(
-    () => ({ startDate, endDate, propertyId: propertyId || undefined, category: category || undefined, workTypeId: workTypeId || undefined }),
-    [startDate, endDate, propertyId, category, workTypeId]
+    () => ({ startDate, endDate, propertyId: scopePropertyId || undefined, category: category || undefined, workTypeId: workTypeId || undefined }),
+    [startDate, endDate, scopePropertyId, category, workTypeId]
   );
 
   useEffect(() => {
@@ -123,7 +126,7 @@ export default function Reports() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, propertyId, category, workTypeId]);
+  }, [startDate, endDate, scopePropertyId, category, workTypeId]);
 
   useEffect(() => {
     if (!workTypeId) {
@@ -147,17 +150,11 @@ export default function Reports() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workTypeId, startDate, endDate, propertyId, category]);
+  }, [workTypeId, startDate, endDate, scopePropertyId, category]);
 
   useEffect(() => {
-    if (viewMode === "map" && (!workTypeId || !propertyId)) setViewMode("list");
-  }, [viewMode, workTypeId, propertyId]);
-
-  const propertyOptions = useMemo(() => {
-    const options = [{ value: null, label: "All Properties", sublabel: null }];
-    for (const p of properties) options.push({ value: p.id, label: p.name, sublabel: null });
-    return options;
-  }, [properties]);
+    if (viewMode === "map" && (!workTypeId || !scopePropertyId)) setViewMode("list");
+  }, [viewMode, workTypeId, scopePropertyId]);
 
   function goToRoot() {
     setCategory(null);
@@ -166,6 +163,21 @@ export default function Reports() {
     setWorkTypeLabelText(null);
     setViewMode("list");
   }
+
+  // Skips the very first run so a real "back to Maintenance Spend" restore
+  // (which legitimately sets category/workTypeId from router state on
+  // mount, while scopePropertyId happens to settle to its initial value at
+  // the same moment) is never immediately clobbered. Only an actual, later
+  // change to global scope resets the drill-down.
+  const isFirstScopeRender = useRef(true);
+  useEffect(() => {
+    if (isFirstScopeRender.current) {
+      isFirstScopeRender.current = false;
+      return;
+    }
+    goToRoot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopePropertyId]);
 
   function selectCategory(row) {
     setCategory(row.key);
@@ -181,10 +193,10 @@ export default function Reports() {
   }
 
   // Carried into WorkOrderDetail's router state so "← Back to Maintenance
-  // Spend" restores this exact scope — filters, drill depth, view mode, all.
+  // Spend" restores this exact scope — filters, drill depth, view mode, all
+  // (Property itself is implicit via global scope, not part of this).
   const reportState = {
     rangeKey,
-    propertyId,
     category,
     categoryLabel: categoryLabelText,
     workTypeId,
@@ -212,10 +224,6 @@ export default function Reports() {
               {option.label}
             </button>
           ))}
-        </div>
-
-        <div className="w-56">
-          <SearchableSelect value={propertyId} onChange={setPropertyId} options={propertyOptions} placeholder="All Properties" />
         </div>
       </div>
 
@@ -271,7 +279,7 @@ export default function Reports() {
             <div>
               <h2 className="mb-3 text-sm font-semibold text-ink">{breakdownLabel} Breakdown</h2>
               {data.breakdown.length === 0 ? (
-                <EmptyState icon={IconWrench} title="No recorded spend in this range" description="Adjust the date range or property filter to see Maintenance Spend." />
+                <EmptyState icon={IconWrench} title="No recorded spend in this range" description="Adjust the date range or property scope to see Maintenance Spend." />
               ) : (
                 <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
                   {data.breakdown.map((row) => (
@@ -310,20 +318,20 @@ export default function Reports() {
                   </button>
                   <button
                     type="button"
-                    disabled={!propertyId}
-                    title={propertyId ? undefined : "Select a single property to view Work Orders on the map."}
-                    onClick={() => propertyId && setViewMode("map")}
+                    disabled={!scopePropertyId}
+                    title={scopePropertyId ? undefined : "Select a single property (via the Property scope selector) to view Work Orders on the map."}
+                    onClick={() => scopePropertyId && setViewMode("map")}
                     className={`rounded-md px-3 py-1 text-xs font-medium transition ${
                       viewMode === "map" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
-                    } ${!propertyId ? "cursor-not-allowed opacity-50" : ""}`}
+                    } ${!scopePropertyId ? "cursor-not-allowed opacity-50" : ""}`}
                   >
                     Map
                   </button>
                 </div>
               </div>
 
-              {!propertyId && (
-                <p className="mb-3 text-xs text-ink-muted">Select a single property above to view these Work Orders on the map.</p>
+              {!scopePropertyId && (
+                <p className="mb-3 text-xs text-ink-muted">Select a single property (Property scope, top of the sidebar) to view these Work Orders on the map.</p>
               )}
 
               {workOrdersStatus === "loading" && <SectionSpinner />}
@@ -369,8 +377,8 @@ export default function Reports() {
                 </div>
               )}
 
-              {workOrdersStatus === "ready" && workOrders.length > 0 && viewMode === "map" && propertyId && (
-                <ReportSpendMap propertyId={propertyId} matchingWorkOrders={workOrders} reportState={reportState} />
+              {workOrdersStatus === "ready" && workOrders.length > 0 && viewMode === "map" && scopePropertyId && (
+                <ReportSpendMap propertyId={scopePropertyId} matchingWorkOrders={workOrders} reportState={reportState} />
               )}
             </div>
           )}

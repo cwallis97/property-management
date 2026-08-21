@@ -3,8 +3,9 @@ import EmptyState from "./EmptyState";
 import SectionSpinner from "./SectionSpinner";
 import SearchableSelect from "./SearchableSelect";
 import InviteUserModal from "./InviteUserModal";
+import EditPropertyAccessModal from "./EditPropertyAccessModal";
 import { IconAlertTriangle, IconTruck, IconPlus } from "./icons";
-import { getMembers, updateMemberRole, getPendingInvites, revokeInvite } from "../utils/api";
+import { getMembers, updateMemberRole, getPendingInvites, revokeInvite, getProperties } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 
 const ROLE_OPTIONS = [
@@ -36,6 +37,22 @@ export default function SettingsUsers() {
   const [invites, setInvites] = useState([]);
   const [invitesStatus, setInvitesStatus] = useState("loading"); // loading | error | ready
   const [revokingId, setRevokingId] = useState(null);
+
+  // Only ever used for the "N of M Properties" access summary below —
+  // includes archived Properties too, so the denominator always matches
+  // what EditPropertyAccessModal's own picker shows.
+  const [propertyCount, setPropertyCount] = useState(null);
+
+  const [editingAccessMember, setEditingAccessMember] = useState(null);
+
+  useEffect(() => {
+    getProperties({ status: "all" })
+      .then((data) => setPropertyCount(data.length))
+      .catch(() => {
+        // The "N of M" summary just won't show a denominator — access
+        // itself is still fully manageable via the modal either way.
+      });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +100,11 @@ export default function SettingsUsers() {
     } finally {
       setPendingId(null);
     }
+  }
+
+  function handleAccessUpdated(updated) {
+    setMembers((prev) => prev.map((m) => (m.membershipId === updated.membershipId ? updated : m)));
+    setEditingAccessMember(null);
   }
 
   function handleInvited(invite) {
@@ -138,6 +160,14 @@ export default function SettingsUsers() {
             const isOwner = member.role === "owner";
             const isSelf = member.userId === user?.id;
             const locked = isOwner || isSelf;
+            // Owner and Admin are always unrestricted (see Property Access
+            // V1's role semantics) — access is only ever actually editable
+            // for a Manager or Technician, and never for your own row.
+            const accessLocked = isOwner || member.role === "admin" || isSelf;
+            const accessSummary =
+              member.accessMode === "restricted"
+                ? `${member.propertyIds?.length ?? 0} of ${propertyCount ?? "…"} Properties`
+                : "All Properties";
 
             return (
               <div
@@ -152,23 +182,48 @@ export default function SettingsUsers() {
                   <p className="truncate text-xs text-ink-secondary">{member.email}</p>
                 </div>
 
-                <div className="w-full shrink-0 sm:w-48">
-                  {locked ? (
-                    <SearchableSelect
-                      value={member.role}
-                      onChange={() => {}}
-                      options={[{ value: member.role, label: roleLabel[member.role] || member.role, sublabel: null }]}
-                      disabled
-                      disabledHint={isOwner ? "Owner role can't be changed" : "You can't change your own role"}
-                    />
-                  ) : (
-                    <SearchableSelect
-                      value={member.role}
-                      onChange={(role) => handleRoleChange(member, role)}
-                      options={ROLE_OPTIONS}
-                      disabled={pendingId === member.membershipId}
-                    />
-                  )}
+                <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                  <div className="w-full sm:w-44">
+                    {locked ? (
+                      <SearchableSelect
+                        value={member.role}
+                        onChange={() => {}}
+                        options={[{ value: member.role, label: roleLabel[member.role] || member.role, sublabel: null }]}
+                        disabled
+                        disabledHint={isOwner ? "Owner role can't be changed" : "You can't change your own role"}
+                      />
+                    ) : (
+                      <SearchableSelect
+                        value={member.role}
+                        onChange={(role) => handleRoleChange(member, role)}
+                        options={ROLE_OPTIONS}
+                        disabled={pendingId === member.membershipId}
+                      />
+                    )}
+                  </div>
+
+                  <div className="w-full sm:w-44">
+                    {accessLocked ? (
+                      <p
+                        className="truncate px-1 text-sm text-ink-muted"
+                        title={
+                          isOwner || member.role === "admin"
+                            ? "Owner and Admin always have access to every property"
+                            : "You can't change your own property access"
+                        }
+                      >
+                        All Properties
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingAccessMember(member)}
+                        className="truncate rounded-lg border border-line px-3 py-2 text-left text-sm text-ink-secondary transition hover:bg-surface-subtle"
+                      >
+                        {accessSummary}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -208,6 +263,14 @@ export default function SettingsUsers() {
 
       {showInviteModal && (
         <InviteUserModal onClose={() => setShowInviteModal(false)} onInvited={handleInvited} />
+      )}
+
+      {editingAccessMember && (
+        <EditPropertyAccessModal
+          member={editingAccessMember}
+          onClose={() => setEditingAccessMember(null)}
+          onUpdated={handleAccessUpdated}
+        />
       )}
     </div>
   );

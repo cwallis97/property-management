@@ -1,11 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { IconX } from "./icons";
-import { createInvite } from "../utils/api";
+import { createInvite, getProperties } from "../utils/api";
 
 const ROLES = [
   { value: "admin", label: "Admin" },
   { value: "manager", label: "Manager" },
   { value: "technician", label: "Technician" },
+];
+
+const ACCESS_MODES = [
+  { value: "all", label: "All Properties" },
+  { value: "restricted", label: "Selected Properties" },
 ];
 
 function formatShortDate(value) {
@@ -19,10 +24,27 @@ function formatShortDate(value) {
 export default function InviteUserModal({ onClose, onInvited }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("technician");
+  // Defaults to All Properties — the same backward-compatible default
+  // Membership.accessMode itself defaults to, so a plain invite with no
+  // property selection behaves exactly as it always has.
+  const [accessMode, setAccessMode] = useState("all");
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [created, setCreated] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  const [properties, setProperties] = useState([]);
+  const [propertiesStatus, setPropertiesStatus] = useState("loading"); // loading | error | ready
+
+  useEffect(() => {
+    getProperties()
+      .then((data) => {
+        setProperties(data);
+        setPropertiesStatus("ready");
+      })
+      .catch(() => setPropertiesStatus("error"));
+  }, []);
 
   useEffect(() => {
     function handleEscape(e) {
@@ -32,6 +54,17 @@ export default function InviteUserModal({ onClose, onInvited }) {
     return () => document.removeEventListener("keydown", handleEscape);
   }, [onClose, submitting]);
 
+  const sortedProperties = useMemo(() => [...properties].sort((a, b) => a.name.localeCompare(b.name)), [properties]);
+
+  function toggleProperty(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (submitting) return;
@@ -40,12 +73,20 @@ export default function InviteUserModal({ onClose, onInvited }) {
       setError("Email is required.");
       return;
     }
+    if (role !== "admin" && accessMode === "restricted" && selectedIds.size === 0) {
+      setError("Select at least one property, or choose All Properties.");
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
 
     try {
-      const invite = await createInvite({ email: email.trim(), role });
+      const payload = { email: email.trim(), role };
+      if (role !== "admin" && accessMode === "restricted") {
+        payload.propertyIds = [...selectedIds];
+      }
+      const invite = await createInvite(payload);
       setCreated(invite);
       onInvited(invite);
     } catch (err) {
@@ -110,6 +151,57 @@ export default function InviteUserModal({ onClose, onInvited }) {
               </div>
             </div>
 
+            {role === "admin" ? (
+              <p className="text-xs text-ink-muted">Admins always have access to every property.</p>
+            ) : (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ink">Property access</label>
+                <div className="flex gap-1.5">
+                  {ACCESS_MODES.map((mode) => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      onClick={() => setAccessMode(mode.value)}
+                      className={`flex-1 rounded-lg px-2 py-2 text-sm font-medium transition ${
+                        accessMode === mode.value ? "bg-accent text-accent-ink" : "bg-surface-subtle text-ink-secondary hover:bg-line"
+                      }`}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+
+                {accessMode === "restricted" && (
+                  <div className="mt-2">
+                    {propertiesStatus === "loading" && <p className="text-sm text-ink-muted">Loading properties…</p>}
+                    {propertiesStatus === "error" && (
+                      <p className="text-sm text-red-600 dark:text-red-400">Couldn't load properties. Please try again.</p>
+                    )}
+                    {propertiesStatus === "ready" && sortedProperties.length === 0 && (
+                      <p className="text-sm text-ink-muted">No properties exist yet.</p>
+                    )}
+                    {propertiesStatus === "ready" && sortedProperties.length > 0 && (
+                      <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-line p-2">
+                        {sortedProperties.map((property) => (
+                          <label
+                            key={property.id}
+                            className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition hover:bg-surface-subtle"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(property.id)}
+                              onChange={() => toggleProperty(property.id)}
+                            />
+                            <span className="min-w-0 flex-1 truncate text-ink">{property.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
             <div className="flex gap-2 pt-1">
@@ -133,7 +225,11 @@ export default function InviteUserModal({ onClose, onInvited }) {
           <div className="space-y-4 px-5 py-5">
             <p className="text-sm text-ink-secondary">
               Send this link to <span className="font-medium text-ink">{created.email}</span> — they'll join as{" "}
-              <span className="font-medium text-ink capitalize">{created.role}</span>.
+              <span className="font-medium text-ink capitalize">{created.role}</span> with access to{" "}
+              <span className="font-medium text-ink">
+                {created.propertyIds ? `${created.propertyIds.length} propert${created.propertyIds.length === 1 ? "y" : "ies"}` : "all properties"}
+              </span>
+              .
             </p>
 
             <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-subtle px-3 py-2.5">

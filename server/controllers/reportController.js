@@ -1,6 +1,7 @@
 import { QueryTypes } from "sequelize";
 import { sequelize, WorkType } from "../models/index.js";
 import { WORK_ORDER_CATEGORIES } from "../models/WorkType.js";
+import { getAccessiblePropertyIds } from "../authorization/propertyAccess.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -68,6 +69,23 @@ function parseFilters(query, companyIds) {
   return { filters };
 }
 
+// Financial data is treated like any other authorization-sensitive surface
+// (see the Property Access architecture report's explicit "Reports like
+// financial authorization" framing) — a restricted member's aggregates must
+// never include an inaccessible Property's cost entries, and an explicit
+// request for one must fail loudly rather than silently returning a
+// plausible-looking zero (which would read as "no spend" instead of "not
+// allowed"). Returns { error } or { accessiblePropertyIds } (null = every
+// Property in the caller's companies, same convention as
+// getAccessiblePropertyIds itself).
+async function resolveAccessScope(req, filters) {
+  const accessiblePropertyIds = await getAccessiblePropertyIds(req, req.companyIds[0]);
+  if (accessiblePropertyIds && filters.propertyId && !accessiblePropertyIds.includes(filters.propertyId)) {
+    return { error: "Property not found." };
+  }
+  return { accessiblePropertyIds };
+}
+
 // Every query joins cost entries -> work orders -> properties and scopes
 // strictly to the caller's own companies, mirroring the exact ownership-
 // chain idiom every other controller already uses (Property.companyId),
@@ -78,12 +96,21 @@ function parseFilters(query, companyIds) {
 // company's data is ever leaked. All dates filter on cost_date — the date
 // the expense was incurred — never work_orders.created_at/completed_at or
 // the cost entry's own created_at (system-entry timestamp only).
-function buildWhereClause(filters) {
+function buildWhereClause(filters, accessiblePropertyIds) {
   // Sequelize expands an array replacement into a parenthesized list for
   // IN (:param) — that's the supported form; ANY(:param) would require an
   // actual Postgres array literal, which plain replacements don't produce.
   const conditions = ["p.company_id IN (:companyIds)", "wo.archived_at IS NULL"];
   const replacements = { companyIds: filters.companyIds };
+
+  // null = unrestricted (every Property in the caller's companies) — see
+  // getAccessiblePropertyIds. A restricted member's accessiblePropertyIds
+  // is always a real array here (resolveAccessScope already rejected an
+  // explicit out-of-scope propertyId filter before this is ever called).
+  if (accessiblePropertyIds) {
+    conditions.push("p.id IN (:accessiblePropertyIds)");
+    replacements.accessiblePropertyIds = accessiblePropertyIds;
+  }
 
   if (filters.startDate) {
     conditions.push("ce.cost_date >= :startDate");
@@ -123,7 +150,17 @@ export async function getMaintenanceSpendSummary(req, res) {
   const { error, filters } = parseFilters(req.query, req.companyIds);
   if (error) return res.status(400).json({ error });
 
-  const { whereSql, replacements } = buildWhereClause(filters);
+  const { error: accessError, accessiblePropertyIds } = await resolveAccessScope(req, filters);
+  if (accessError) return res.status(404).json({ error: accessError });
+  // A restricted member with zero grants (not reachable through the normal
+  // management endpoint, which refuses to save that state, but defensive
+  // regardless) has nothing to aggregate — short-circuit rather than ever
+  // sending an empty IN (...) list to Postgres.
+  if (accessiblePropertyIds && accessiblePropertyIds.length === 0) {
+    return res.json({ summary: { totalSpend: 0, workOrdersWithCost: 0, averageCostPerWorkOrder: 0 }, breakdown: [] });
+  }
+
+  const { whereSql, replacements } = buildWhereClause(filters, accessiblePropertyIds);
 
   const [summaryRow] = await sequelize.query(
     `
@@ -210,7 +247,13 @@ export async function getMaintenanceSpendWorkOrders(req, res) {
   const { error, filters } = parseFilters(req.query, req.companyIds);
   if (error) return res.status(400).json({ error });
 
-  const { whereSql, replacements } = buildWhereClause(filters);
+  const { error: accessError, accessiblePropertyIds } = await resolveAccessScope(req, filters);
+  if (accessError) return res.status(404).json({ error: accessError });
+  if (accessiblePropertyIds && accessiblePropertyIds.length === 0) {
+    return res.json([]);
+  }
+
+  const { whereSql, replacements } = buildWhereClause(filters, accessiblePropertyIds);
 
   const rows = await sequelize.query(
     `

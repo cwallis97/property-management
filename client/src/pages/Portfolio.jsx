@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
@@ -43,23 +43,23 @@ const EMPTY_STATE_COPY = {
   all: { title: "No properties yet", description: "Properties added to your company will show up here." },
 };
 
+// Property filtering is the global Property Scope selector (Sidebar), not
+// a second control here — same rule as Dashboard/Assets/Work Orders/
+// Documents/Reports, no exception. Property Scope composes on top of the
+// Active/Archived/All lifecycle filter (already applied server-side via
+// getProperties({status: view}), which — per Property Access V1 — already
+// only ever returns Properties this member can access): scope simply
+// narrows that already-fetched, already-access-safe list down to one row
+// when set, client-side, with no second API call and no new state.
 export default function Portfolio() {
   const navigate = useNavigate();
-  const { clearPropertyScope } = usePropertyScope();
+  const { propertyId: scopePropertyId, property: scopeProperty } = usePropertyScope();
   const { hasCapability } = useAuth();
   const [view, setView] = useState("active");
   const [properties, setProperties] = useState([]);
   const [status, setStatus] = useState("loading"); // "loading" | "error" | "ready"
   const [error, setError] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-
-  // Portfolio is inherently the all-properties view — arriving here is a
-  // clear, deliberate signal to reset scope, unlike simply navigating to
-  // Dashboard or another global page, which should keep whatever Property
-  // scope was already active.
-  useEffect(() => {
-    clearPropertyScope();
-  }, [clearPropertyScope]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,11 +82,16 @@ export default function Portfolio() {
     };
   }, [view]);
 
+  const visibleProperties = useMemo(
+    () => (scopePropertyId ? properties.filter((p) => p.id === scopePropertyId) : properties),
+    [properties, scopePropertyId]
+  );
+
   return (
     <div>
       <PageHeader
         title="Portfolio"
-        description="All properties across your organization."
+        description={scopeProperty ? scopeProperty.name : "All properties across your organization."}
       />
 
       {status === "ready" && (
@@ -119,13 +124,13 @@ export default function Portfolio() {
         />
       )}
 
-      {status === "ready" && properties.length === 0 && (
+      {status === "ready" && visibleProperties.length === 0 && (
         <EmptyState icon={IconBuilding} title={EMPTY_STATE_COPY[view].title} description={EMPTY_STATE_COPY[view].description} />
       )}
 
-      {status === "ready" && properties.length > 0 && (
+      {status === "ready" && visibleProperties.length > 0 && (
         <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
-          {properties.map((property) => (
+          {visibleProperties.map((property) => (
             <Link
               key={property.id}
               to={`/portfolio/${property.id}`}

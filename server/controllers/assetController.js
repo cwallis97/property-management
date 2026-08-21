@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import { sequelize, Asset, Location, Property, WorkOrder, WorkType, WorkOrderCostEntry, ASSET_STATUSES } from "../models/index.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
+import { getAccessiblePropertyIds, requirePropertyAccess } from "../authorization/propertyAccess.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -98,7 +99,14 @@ export async function listAssetsForCompany(req, res) {
 
   if (properties.length === 0) return res.json([]);
 
-  const propertyIds = properties.map((p) => p.id);
+  let propertyIds = properties.map((p) => p.id);
+
+  const accessiblePropertyIds = await getAccessiblePropertyIds(req, req.companyIds[0]);
+  if (accessiblePropertyIds) {
+    const accessibleSet = new Set(accessiblePropertyIds);
+    propertyIds = propertyIds.filter((id) => accessibleSet.has(id));
+  }
+  if (propertyIds.length === 0) return res.json([]);
 
   const assets = await Asset.findAll({
     where: { propertyId: { [Op.in]: propertyIds }, archivedAt: null },
@@ -119,6 +127,7 @@ export async function listAssetsForProperty(req, res) {
 
   const property = await findOwnedProperty(req.params.propertyId, req.companyIds);
   if (!property) return res.status(404).json({ error: "Property not found." });
+  if (!(await requirePropertyAccess(req, res, property.companyId, property.id))) return;
 
   const assets = await Asset.findAll({
     where: { propertyId: property.id, archivedAt: null },
@@ -134,6 +143,7 @@ export async function createAsset(req, res) {
 
   const property = await findOwnedProperty(req.params.propertyId, req.companyIds);
   if (!property) return res.status(404).json({ error: "Property not found." });
+  if (!(await requirePropertyAccess(req, res, property.companyId, property.id))) return;
   if (!requireCapability(req, res, property.companyId, CAPABILITIES.ASSET_CREATE)) return;
   if (property.status === "archived") {
     return res.status(400).json({ error: "Cannot add an asset to an archived property. Restore it first." });
@@ -186,6 +196,7 @@ export async function getAsset(req, res) {
 
   const asset = await findOwnedAsset(req.params.id, req.companyIds);
   if (!asset) return res.status(404).json({ error: "Asset not found." });
+  if (!(await requirePropertyAccess(req, res, asset.property.companyId, asset.propertyId))) return;
 
   const [property, location, workOrders] = await Promise.all([
     Property.findByPk(asset.propertyId, { attributes: ["id", "name"] }),
@@ -238,6 +249,7 @@ export async function updateAsset(req, res) {
 
   const asset = await findOwnedAsset(req.params.id, req.companyIds);
   if (!asset) return res.status(404).json({ error: "Asset not found." });
+  if (!(await requirePropertyAccess(req, res, asset.property.companyId, asset.propertyId))) return;
   if (!requireCapability(req, res, asset.property.companyId, CAPABILITIES.ASSET_EDIT)) return;
 
   const { name, category, status, installDate, notes, locationId } = req.body;
@@ -300,6 +312,7 @@ export async function archiveAsset(req, res) {
 
   const asset = await findOwnedAsset(req.params.id, req.companyIds);
   if (!asset) return res.status(404).json({ error: "Asset not found." });
+  if (!(await requirePropertyAccess(req, res, asset.property.companyId, asset.propertyId))) return;
   if (!requireCapability(req, res, asset.property.companyId, CAPABILITIES.ASSET_EDIT)) return;
 
   asset.archivedAt = new Date();

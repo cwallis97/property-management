@@ -3,11 +3,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import SectionSpinner from "../components/SectionSpinner";
-import SearchableSelect from "../components/SearchableSelect";
 import WorkOrderTable from "../components/WorkOrderTable";
 import WorkOrderViewFilter from "../components/WorkOrderViewFilter";
 import { IconAlertTriangle, IconWrench } from "../components/icons";
-import { getPortfolioWorkOrders, getProperties } from "../utils/api";
+import { getPortfolioWorkOrders } from "../utils/api";
 import { usePropertyScope } from "../context/PropertyScopeContext";
 import { formatAge, isOverdue, compareByAttention, filterWorkOrdersByView } from "../utils/workOrders";
 
@@ -18,32 +17,23 @@ import { formatAge, isOverdue, compareByAttention, filterWorkOrdersByView } from
 // entries required for a row to appear) and not another Dashboard (this is
 // where an operator actually works through the queue, not just sees where
 // attention is needed).
+//
+// Property filtering is the global Property Scope selector (Sidebar), not
+// a second control here — live-follows scope, same as Assets.
 export default function WorkOrders() {
   const location = useLocation();
   const navigate = useNavigate();
   // Returning from a Work Order opened out of this queue restores the exact
   // same view/filter — same router-state pattern used by every other
   // "back to origin" flow in the app (PropertyDetail's tab, Reports' drill
-  // state), never browser history.
+  // state), never browser history. Property is no longer part of that
+  // restored state — it's tracked globally now, and since nothing on the
+  // round trip to a Work Order and back ever changes scope, it's already
+  // exactly what it was when the user left.
   const restored = location.state?.portfolioWorkOrdersState ?? null;
-  // Same rule as Portfolio Assets: explicit return-to-origin state wins if
-  // present, otherwise seed from the app's current Property scope. Fully
-  // independent local state after that — this page's filter never writes
-  // back to global scope.
   const { propertyId: scopePropertyId } = usePropertyScope();
 
   const [view, setView] = useState(restored?.view ?? "active");
-  const [propertyFilterId, setPropertyFilterId] = useState(restored?.propertyId ?? scopePropertyId ?? null);
-
-  const [properties, setProperties] = useState([]);
-  useEffect(() => {
-    getProperties()
-      .then(setProperties)
-      .catch(() => {
-        // The property filter just won't populate — the queue itself still
-        // works unfiltered.
-      });
-  }, []);
 
   const [workOrders, setWorkOrders] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | error | ready
@@ -113,39 +103,36 @@ export default function WorkOrders() {
     });
   }, [workOrders]);
 
-  // Always the full portfolio's active population — never affected by the
-  // Property filter or the Active/Completed/All toggle, so switching either
-  // one can never make urgent/overdue work silently disappear from this
-  // summary. Same property-level convention as PropertyDetail's "Needs
-  // attention" strip, just scoped to the whole portfolio instead of one
-  // property.
-  const urgentCount = workOrderRows.filter((row) => row.priority === "urgent" && row.status !== "completed").length;
-  const overdueCount = workOrderRows.filter((row) => row.overdue).length;
+  // Property Scope first (the one authoritative "where am I working"
+  // signal — see PropertyScopeContext), then the Active/Completed/All
+  // toggle. The "Needs attention" strip below is derived from this same
+  // scoped set, not the raw portfolio-wide one, so it can never show a
+  // count the table beneath it doesn't actually contain — a stale strip
+  // disagreeing with its own table is exactly the kind of two-sources-of-
+  // truth confusion Property Scope Unification is meant to remove.
+  const scopedRows = useMemo(
+    () => (scopePropertyId ? workOrderRows.filter((row) => row.propertyId === scopePropertyId) : workOrderRows),
+    [workOrderRows, scopePropertyId]
+  );
 
-  // What the table actually renders: Property filter first, then the
-  // existing Active/Completed/All semantics, then ordering. Active/All keep
-  // the exact shared compareByAttention ranking so this queue and every
-  // property's own Work Orders tab never disagree about what's most
-  // urgent. Completed is the one explicit exception — most-recently-
-  // completed first is more useful for a "what just got resolved" scan —
-  // implemented here as a small local sort, not a change to the shared
-  // attention algorithm's meaning.
+  const urgentCount = scopedRows.filter((row) => row.priority === "urgent" && row.status !== "completed").length;
+  const overdueCount = scopedRows.filter((row) => row.overdue).length;
+
+  // Active/All keep the exact shared compareByAttention ranking so this
+  // queue and every property's own Work Orders tab never disagree about
+  // what's most urgent. Completed is the one explicit exception — most-
+  // recently-completed first is more useful for a "what just got resolved"
+  // scan — implemented here as a small local sort, not a change to the
+  // shared attention algorithm's meaning.
   const visibleRows = useMemo(() => {
-    const scoped = propertyFilterId ? workOrderRows.filter((row) => row.propertyId === propertyFilterId) : workOrderRows;
-    const filtered = filterWorkOrdersByView(scoped, view);
+    const filtered = filterWorkOrdersByView(scopedRows, view);
     if (view === "completed") {
       return [...filtered].sort((a, b) => (b.completedAtMs ?? 0) - (a.completedAtMs ?? 0));
     }
     return [...filtered].sort(compareByAttention);
-  }, [workOrderRows, propertyFilterId, view]);
+  }, [scopedRows, view]);
 
-  const propertyOptions = useMemo(() => {
-    const options = [{ value: null, label: "All Properties", sublabel: null }];
-    for (const p of properties) options.push({ value: p.id, label: p.name, sublabel: null });
-    return options;
-  }, [properties]);
-
-  const portfolioWorkOrdersState = { view, propertyId: propertyFilterId };
+  const portfolioWorkOrdersState = { view };
 
   return (
     <div>
@@ -153,14 +140,6 @@ export default function WorkOrders() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <WorkOrderViewFilter value={view} onChange={setView} />
-        <div className="w-56">
-          <SearchableSelect
-            value={propertyFilterId}
-            onChange={setPropertyFilterId}
-            options={propertyOptions}
-            placeholder="All Properties"
-          />
-        </div>
       </div>
 
       {status === "loading" && <SectionSpinner />}
@@ -204,7 +183,7 @@ export default function WorkOrders() {
           ) : (
             <WorkOrderTable
               rows={visibleRows}
-              showPropertyContext
+              showPropertyContext={!scopePropertyId}
               onRowClick={(id) => {
                 const row = visibleRows.find((r) => r.id === id);
                 if (!row) return;

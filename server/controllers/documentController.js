@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import { Document, Property, Asset, WorkOrder, Vendor, User, DOCUMENT_CATEGORIES, DOCUMENT_ALLOWED_MIME_TYPES } from "../models/index.js";
 import { saveDocumentFile, deleteDocumentFile, getFilePath, acceptedExtensionsForMimeType } from "../utils/documentStorage.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
+import { getAccessiblePropertyIds, requirePropertyAccess } from "../authorization/propertyAccess.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ATTACHMENT_FIELDS = ["propertyId", "assetId", "workOrderId", "vendorId"];
@@ -41,7 +42,7 @@ async function resolveAttachmentTarget(body, companyIds) {
   if (field === "propertyId") {
     const property = await Property.findOne({ where: { id, companyId: { [Op.in]: companyIds } } });
     if (!property) return { error: { status: 404, body: { error: "Property not found." } } };
-    return { attachment: { field, id: property.id, companyId: property.companyId } };
+    return { attachment: { field, id: property.id, companyId: property.companyId, propertyId: property.id } };
   }
 
   if (field === "assetId") {
@@ -50,7 +51,7 @@ async function resolveAttachmentTarget(body, companyIds) {
       include: { model: Property, as: "property", where: { companyId: { [Op.in]: companyIds } }, attributes: ["id", "companyId"] },
     });
     if (!asset) return { error: { status: 404, body: { error: "Asset not found." } } };
-    return { attachment: { field, id: asset.id, companyId: asset.property.companyId } };
+    return { attachment: { field, id: asset.id, companyId: asset.property.companyId, propertyId: asset.propertyId } };
   }
 
   if (field === "workOrderId") {
@@ -59,17 +60,20 @@ async function resolveAttachmentTarget(body, companyIds) {
       include: { model: Property, as: "property", where: { companyId: { [Op.in]: companyIds } }, attributes: ["id", "companyId"] },
     });
     if (!workOrder) return { error: { status: 404, body: { error: "Work order not found." } } };
-    return { attachment: { field, id: workOrder.id, companyId: workOrder.property.companyId } };
+    return { attachment: { field, id: workOrder.id, companyId: workOrder.property.companyId, propertyId: workOrder.propertyId } };
   }
 
   // vendorId — deliberately no active/inactive gate here. Attaching a
   // document (an insurance certificate, a final invoice) is compatible
   // with any Vendor lifecycle state; unlike assigning NEW work, it never
   // implies "this vendor is currently available," so resolveVendorId's
-  // inactive-rejection rule does not apply to Document attachment.
+  // inactive-rejection rule does not apply to Document attachment. No
+  // propertyId — a Vendor isn't Property-owned, and per Property Access
+  // V1, Vendor-attached documents stay Company-level/visible to anyone who
+  // can see the Vendor (see getVendor's own comment for the same rule).
   const vendor = await Vendor.findOne({ where: { id, companyId: { [Op.in]: companyIds } } });
   if (!vendor) return { error: { status: 404, body: { error: "Vendor not found." } } };
-  return { attachment: { field, id: vendor.id, companyId: vendor.companyId } };
+  return { attachment: { field, id: vendor.id, companyId: vendor.companyId, propertyId: null } };
 }
 
 async function findOwnedDocument(id, companyIds) {
@@ -78,6 +82,36 @@ async function findOwnedDocument(id, companyIds) {
   // "archived" only ever means "excluded from default listings", never
   // "inaccessible".
   return Document.findOne({ where: { id, companyId: { [Op.in]: companyIds } } });
+}
+
+// A Document doesn't carry its own propertyId — it derives from whichever
+// single attachment field is actually set (see the model's CHECK
+// constraint: exactly one of propertyId/assetId/workOrderId/vendorId is
+// ever non-null). null return means "no Property to check" (vendor-
+// attached), same convention resolveAttachmentTarget's attachment.propertyId
+// already uses for the create path.
+async function resolveDocumentPropertyId(document) {
+  if (document.propertyId) return document.propertyId;
+  if (document.assetId) {
+    const asset = await Asset.findByPk(document.assetId, { attributes: ["propertyId"] });
+    return asset ? asset.propertyId : null;
+  }
+  if (document.workOrderId) {
+    const workOrder = await WorkOrder.findByPk(document.workOrderId, { attributes: ["propertyId"] });
+    return workOrder ? workOrder.propertyId : null;
+  }
+  return null;
+}
+
+// Shared by every single-Document endpoint below (update/replace/archive/
+// file streaming) — the one place "may this caller reach this specific
+// Document" is decided, so the four call sites can never drift on the
+// rule. Returns true/false and responds itself, mirroring
+// requirePropertyAccess's own shape.
+async function requireDocumentAccess(req, res, document) {
+  const propertyId = await resolveDocumentPropertyId(document);
+  if (!propertyId) return true; // vendor-attached — Company-level, always visible
+  return requirePropertyAccess(req, res, document.companyId, propertyId);
 }
 
 const SERIALIZE_INCLUDE = [
@@ -156,6 +190,28 @@ export async function listDocuments(req, res) {
     }
   }
 
+  // A Document has no direct propertyId column in every case (see
+  // resolveDocumentPropertyId) — for a restricted member, narrow to
+  // Documents attached directly to an accessible Property, an Asset that
+  // belongs to one, a Work Order that belongs to one, or (per Property
+  // Access V1's Vendor rule) any Vendor-attached Document at all. Combined
+  // with an explicit attachment-field filter above via plain AND, so
+  // filtering to an inaccessible target correctly yields zero rows rather
+  // than leaking anything.
+  const accessiblePropertyIds = await getAccessiblePropertyIds(req, req.companyIds[0]);
+  if (accessiblePropertyIds) {
+    const [accessibleAssets, accessibleWorkOrders] = await Promise.all([
+      Asset.findAll({ where: { propertyId: { [Op.in]: accessiblePropertyIds } }, attributes: ["id"] }),
+      WorkOrder.findAll({ where: { propertyId: { [Op.in]: accessiblePropertyIds } }, attributes: ["id"] }),
+    ]);
+    where[Op.or] = [
+      { propertyId: { [Op.in]: accessiblePropertyIds } },
+      { assetId: { [Op.in]: accessibleAssets.map((a) => a.id) } },
+      { workOrderId: { [Op.in]: accessibleWorkOrders.map((w) => w.id) } },
+      { vendorId: { [Op.ne]: null } },
+    ];
+  }
+
   const documents = await Document.findAll({ where, include: SERIALIZE_INCLUDE, order: [["createdAt", "DESC"]] });
   res.json(documents.map(serializeDocument));
 }
@@ -185,6 +241,11 @@ export async function createDocument(req, res) {
   // discipline as sitePlanController.
   const { attachment, error: attachmentError } = await resolveAttachmentTarget(req.body, req.companyIds);
   if (attachmentError) return res.status(attachmentError.status).json(attachmentError.body);
+  // Vendor-attached (attachment.propertyId === null) skips this by design
+  // — Vendor documents are Company-level, not Property-scoped.
+  if (attachment.propertyId) {
+    if (!(await requirePropertyAccess(req, res, attachment.companyId, attachment.propertyId))) return;
+  }
   if (!requireCapability(req, res, attachment.companyId, CAPABILITIES.DOCUMENT_MANAGE)) return;
 
   const storedFilename = await saveDocumentFile(req.file.buffer, req.file.mimetype);
@@ -211,6 +272,7 @@ export async function updateDocument(req, res) {
   }
   const document = await findOwnedDocument(req.params.id, req.companyIds);
   if (!document) return res.status(404).json({ error: "Document not found." });
+  if (!(await requireDocumentAccess(req, res, document))) return;
   if (!requireCapability(req, res, document.companyId, CAPABILITIES.DOCUMENT_MANAGE)) return;
 
   const { name, category, notes } = req.body;
@@ -250,6 +312,7 @@ export async function replaceDocumentFile(req, res) {
   }
   const document = await findOwnedDocument(req.params.id, req.companyIds);
   if (!document) return res.status(404).json({ error: "Document not found." });
+  if (!(await requireDocumentAccess(req, res, document))) return;
   if (!requireCapability(req, res, document.companyId, CAPABILITIES.DOCUMENT_MANAGE)) return;
 
   if (!req.file) {
@@ -290,6 +353,7 @@ export async function archiveDocument(req, res) {
   }
   const document = await findOwnedDocument(req.params.id, req.companyIds);
   if (!document) return res.status(404).json({ error: "Document not found." });
+  if (!(await requireDocumentAccess(req, res, document))) return;
   if (!requireCapability(req, res, document.companyId, CAPABILITIES.DOCUMENT_MANAGE)) return;
 
   document.archivedAt = new Date();
@@ -303,6 +367,7 @@ export async function getDocumentFile(req, res) {
   }
   const document = await findOwnedDocument(req.params.id, req.companyIds);
   if (!document) return res.status(404).json({ error: "Document not found." });
+  if (!(await requireDocumentAccess(req, res, document))) return;
 
   res.setHeader("Content-Type", document.mimeType);
   res.sendFile(getFilePath(document.storedFilename), (err) => {

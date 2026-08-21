@@ -24,6 +24,12 @@ export function initInvitationModel(sequelize) {
       // every other derived-not-stored field in this app.
       acceptedAt: { type: DataTypes.DATE, allowNull: true, field: "accepted_at" },
       revokedAt: { type: DataTypes.DATE, allowNull: true, field: "revoked_at" },
+      // Intent captured at invite time only — null means "All Properties",
+      // a non-empty array means "Selected Properties". Re-validated against
+      // the inviting Company at acceptance, never trusted as-is; the real,
+      // durable grant is the PropertyAccess rows acceptInvite creates then.
+      // Never read again after acceptance.
+      propertyIds: { type: DataTypes.JSONB, allowNull: true, field: "property_ids" },
     },
     {
       sequelize,

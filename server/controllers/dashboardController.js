@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import { Property, Location, Asset, WorkOrder } from "../models/index.js";
+import { getAccessiblePropertyIds } from "../authorization/propertyAccess.js";
 
 // Portfolio-wide operational summary for the authenticated user's Company.
 // Four flat, company-scoped queries regardless of how many Properties exist
@@ -22,8 +23,16 @@ export async function getDashboardSummary(req, res) {
   // been taken out of active operations. Its history remains fully intact
   // and reachable from its own (still fully inspectable) Property Detail
   // page; it just doesn't contribute to "what needs attention right now."
+  const where = { companyId: { [Op.in]: req.companyIds }, status: "active" };
+  // High-risk surface for an aggregate leak (see the Property Access
+  // architecture report) — this is the single filter every downstream
+  // number on this page derives from, so restricting it here is what
+  // keeps every count below honest for a restricted member.
+  const accessiblePropertyIds = await getAccessiblePropertyIds(req, req.companyIds[0]);
+  if (accessiblePropertyIds) where.id = { [Op.in]: accessiblePropertyIds };
+
   const properties = await Property.findAll({
-    where: { companyId: { [Op.in]: req.companyIds }, status: "active" },
+    where,
     attributes: ["id", "name"],
     order: [["name", "ASC"]],
   });

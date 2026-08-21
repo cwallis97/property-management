@@ -1,8 +1,9 @@
 import { sequelize } from "../db/sequelize.js";
 import { initUserModel, User } from "./User.js";
 import { initCompanyModel, Company } from "./Company.js";
-import { initMembershipModel, Membership, MEMBERSHIP_ROLES } from "./Membership.js";
+import { initMembershipModel, Membership, MEMBERSHIP_ROLES, MEMBERSHIP_ACCESS_MODES } from "./Membership.js";
 import { initPropertyModel, Property, PROPERTY_STATUSES } from "./Property.js";
+import { initPropertyAccessModel, PropertyAccess } from "./PropertyAccess.js";
 import { initPinModel, Pin, PIN_TYPES } from "./Pin.js";
 import { initRepairModel, Repair, SEVERITY_LEVELS, REPAIR_STATUSES } from "./Repair.js";
 import { initLocationModel, Location } from "./Location.js";
@@ -26,6 +27,7 @@ initUserModel(sequelize);
 initCompanyModel(sequelize);
 initMembershipModel(sequelize);
 initPropertyModel(sequelize);
+initPropertyAccessModel(sequelize);
 initPinModel(sequelize);
 initRepairModel(sequelize);
 initLocationModel(sequelize);
@@ -51,6 +53,18 @@ Membership.belongsTo(Company, { foreignKey: "companyId", as: "company" });
 
 Company.hasMany(Property, { foreignKey: "companyId", as: "properties", onDelete: "CASCADE" });
 Property.belongsTo(Company, { foreignKey: "companyId", as: "company" });
+
+// A live permission grant, not historical record — CASCADE on both sides
+// (unlike the RESTRICT-on-history associations elsewhere in this file) is
+// deliberate: a grant has no independent meaning once either the
+// Membership or the Property it points at is gone. See this table's
+// migration for the full reasoning, including why there's no redundant
+// companyId column.
+Membership.hasMany(PropertyAccess, { foreignKey: "membershipId", as: "propertyAccess", onDelete: "CASCADE" });
+PropertyAccess.belongsTo(Membership, { foreignKey: "membershipId", as: "membership" });
+
+Property.hasMany(PropertyAccess, { foreignKey: "propertyId", as: "accessGrants", onDelete: "CASCADE" });
+PropertyAccess.belongsTo(Property, { foreignKey: "propertyId", as: "property" });
 
 Property.hasMany(Pin, { foreignKey: "propertyId", as: "pins", onDelete: "CASCADE" });
 Pin.belongsTo(Property, { foreignKey: "propertyId", as: "property" });
@@ -177,8 +191,10 @@ export {
   User,
   Company,
   Membership,
+  MEMBERSHIP_ACCESS_MODES,
   Property,
   PROPERTY_STATUSES,
+  PropertyAccess,
   Pin,
   Repair,
   Location,

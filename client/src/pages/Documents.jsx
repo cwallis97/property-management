@@ -8,7 +8,7 @@ import AddDocumentModal from "../components/AddDocumentModal";
 import EditDocumentModal from "../components/EditDocumentModal";
 import { IconAlertTriangle, IconFolder, IconPlus } from "../components/icons";
 import { DOCUMENT_CATEGORIES } from "../utils/documents";
-import { getDocuments, archiveDocument, getProperties } from "../utils/api";
+import { getDocuments, archiveDocument } from "../utils/api";
 import { usePropertyScope } from "../context/PropertyScopeContext";
 import { useAuth } from "../context/AuthContext";
 import { CAPABILITIES } from "../utils/capabilities";
@@ -45,31 +45,24 @@ function DocumentViewFilter({ value, onChange }) {
 // file-management product. Every row traces back to the exact same
 // Document records EntityDocuments shows on each entity's own page; there
 // is no separate "global" data source.
+//
+// Property filtering is the global Property Scope selector (Sidebar), not
+// a second control here — live-follows scope, refetching (not client-side
+// filtering) since the portfolio-wide list endpoint already accepts a
+// server-side propertyId param. Note this param only matches Documents
+// attached DIRECTLY to that Property, not to its Assets/Work Orders (same
+// narrower meaning it's always had) — scoping to a Property here is
+// therefore a real, if slightly narrower-than-expected, filter, not a
+// no-op.
 export default function Documents() {
-  // Seeded from the app's current Property scope on first mount, then fully
-  // independent local state — matches the same rule as Portfolio Assets/
-  // Work Orders. Unlike those two, Documents' portfolio-wide list endpoint
-  // already accepts a server-side propertyId filter, so this refetches
-  // rather than filtering an already-fetched array client-side.
   const { propertyId: scopePropertyId } = usePropertyScope();
   const { hasCapability } = useAuth();
   const canManage = hasCapability(CAPABILITIES.DOCUMENT_MANAGE);
 
   const [view, setView] = useState("active");
   const [category, setCategory] = useState(null);
-  const [propertyFilterId, setPropertyFilterId] = useState(scopePropertyId ?? null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingDocument, setEditingDocument] = useState(null);
-
-  const [properties, setProperties] = useState([]);
-  useEffect(() => {
-    getProperties()
-      .then(setProperties)
-      .catch(() => {
-        // The property filter just won't populate — the list itself still
-        // works unfiltered.
-      });
-  }, []);
 
   const [documents, setDocuments] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | error | ready
@@ -77,7 +70,7 @@ export default function Documents() {
   useEffect(() => {
     let cancelled = false;
     setStatus("loading");
-    getDocuments(propertyFilterId ? { propertyId: propertyFilterId } : {})
+    getDocuments(scopePropertyId ? { propertyId: scopePropertyId } : {})
       .then((data) => {
         if (cancelled) return;
         setDocuments(data);
@@ -90,7 +83,7 @@ export default function Documents() {
     return () => {
       cancelled = true;
     };
-  }, [propertyFilterId]);
+  }, [scopePropertyId]);
 
   const rows = useMemo(
     () =>
@@ -120,19 +113,13 @@ export default function Documents() {
     []
   );
 
-  const propertyOptions = useMemo(() => {
-    const options = [{ value: null, label: "All Properties", sublabel: null }];
-    for (const p of properties) options.push({ value: p.id, label: p.name, sublabel: null });
-    return options;
-  }, [properties]);
-
   function handleCreated(created) {
-    // The current filter (when set) only matches Documents attached
+    // The current scope (when set) only matches Documents attached
     // directly to that Property — same narrower meaning the backend query
     // param already has everywhere else (EntityDocuments included). Only
     // optimistically prepend if the new Document actually satisfies that,
     // so the list never shows something a refetch wouldn't.
-    const matchesFilter = !propertyFilterId || (created.attachment?.type === "property" && created.attachment.id === propertyFilterId);
+    const matchesFilter = !scopePropertyId || (created.attachment?.type === "property" && created.attachment.id === scopePropertyId);
     if (matchesFilter) setDocuments((prev) => [created, ...prev]);
     setShowAddModal(false);
   }
@@ -164,14 +151,6 @@ export default function Documents() {
           <DocumentViewFilter value={view} onChange={setView} />
           <div className="w-48">
             <SearchableSelect value={category} onChange={setCategory} options={categoryOptions} placeholder="All Categories" />
-          </div>
-          <div className="w-48">
-            <SearchableSelect
-              value={propertyFilterId}
-              onChange={setPropertyFilterId}
-              options={propertyOptions}
-              placeholder="All Properties"
-            />
           </div>
         </div>
         {canManage && (

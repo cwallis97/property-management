@@ -11,6 +11,7 @@ import {
   VENDOR_STATUSES,
 } from "../models/index.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
+import { getAccessiblePropertyIds } from "../authorization/propertyAccess.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -142,22 +143,42 @@ export async function getVendor(req, res) {
   const vendor = await findOwnedVendor(req.params.id, req.companyIds);
   if (!vendor) return res.status(404).json({ error: "Vendor not found." });
 
-  const links = await WorkOrderVendor.findAll({ where: { vendorId: vendor.id }, attributes: ["workOrderId"] });
-  const workOrderIds = links.map((l) => l.workOrderId);
+  // The Vendor directory itself (findOwnedVendor above) is deliberately
+  // NOT Property-restricted — identity/contact/category is Company-level
+  // per Property Access V1's Vendor rule. Everything below IS restricted:
+  // a Vendor's derived Work History / Actual Spend / Properties Worked are
+  // Property-scoped aggregates, and must never show a restricted member
+  // costs or Work Orders at a Property they can't otherwise see.
+  const accessiblePropertyIds = await getAccessiblePropertyIds(req, vendor.companyId);
 
-  const [workOrders, costRows, actualSpendResult] = await Promise.all([
-    workOrderIds.length
-      ? WorkOrder.findAll({
-          where: { id: { [Op.in]: workOrderIds }, archivedAt: null },
-          attributes: ["id", "title", "status", "priority", "dueDate", "completedAt", "createdAt", "category", "propertyId", "locationId"],
-          include: [
-            { model: Property, as: "property", attributes: ["id", "name"] },
-            { model: Location, as: "location", attributes: ["id", "name"] },
-            { model: WorkType, as: "workType", attributes: ["id", "label"] },
-          ],
-          order: [["createdAt", "DESC"]],
-        })
-      : [],
+  const links = await WorkOrderVendor.findAll({ where: { vendorId: vendor.id }, attributes: ["workOrderId"] });
+  const linkedWorkOrderIds = links.map((l) => l.workOrderId);
+
+  const workOrders = linkedWorkOrderIds.length
+    ? await WorkOrder.findAll({
+        where: {
+          id: { [Op.in]: linkedWorkOrderIds },
+          archivedAt: null,
+          ...(accessiblePropertyIds ? { propertyId: { [Op.in]: accessiblePropertyIds } } : {}),
+        },
+        attributes: ["id", "title", "status", "priority", "dueDate", "completedAt", "createdAt", "category", "propertyId", "locationId"],
+        include: [
+          { model: Property, as: "property", attributes: ["id", "name"] },
+          { model: Location, as: "location", attributes: ["id", "name"] },
+          { model: WorkType, as: "workType", attributes: ["id", "label"] },
+        ],
+        order: [["createdAt", "DESC"]],
+      })
+    : [];
+
+  // Every aggregate below is computed from this already-access-filtered
+  // id list, not the raw links above — this is what keeps costRows,
+  // actualSpend, and (via `workOrders` itself, further down) Properties
+  // Worked all in sync with the same restriction, rather than three
+  // separately-applied filters that could drift.
+  const workOrderIds = workOrders.map((wo) => wo.id);
+
+  const [costRows, actualSpendResult] = await Promise.all([
     // This Vendor's attributable cost, per Work Order — grouped by
     // work_order_id AND filtered to this vendor's own cost entries, so a
     // Work Order that (in a future multi-vendor world) has cost entries
@@ -170,12 +191,19 @@ export async function getVendor(req, res) {
           raw: true,
         })
       : [],
-    // Actual Vendor Spend is deliberately NOT derived from the Work Order
-    // list above — it's the direct sum of every cost entry ever attributed
-    // to this Vendor, so it stays correct even if a Work Order's current
-    // Vendor assignment later changes (see resolveVendorId's comment: that
-    // never touches existing cost-entry attribution).
-    WorkOrderCostEntry.sum("amount", { where: { vendorId: vendor.id } }),
+    // Actual Vendor Spend is normally the direct sum of every cost entry
+    // ever attributed to this Vendor, independent of the Work Order list
+    // above (see resolveVendorId's comment: a Work Order's current Vendor
+    // assignment changing never touches existing cost-entry attribution).
+    // For a restricted member that whole-Vendor sum would leak spend at
+    // inaccessible Properties, so it's scoped down to the same
+    // access-filtered workOrderIds instead — an unrestricted caller still
+    // gets the true lifetime total.
+    accessiblePropertyIds
+      ? workOrderIds.length
+        ? WorkOrderCostEntry.sum("amount", { where: { workOrderId: { [Op.in]: workOrderIds }, vendorId: vendor.id } })
+        : 0
+      : WorkOrderCostEntry.sum("amount", { where: { vendorId: vendor.id } }),
   ]);
 
   const costByWorkOrderId = Object.fromEntries(costRows.map((r) => [r.workOrderId, Number(r.total)]));

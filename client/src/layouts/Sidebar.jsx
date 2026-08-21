@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   IconGrid,
   IconBuilding,
@@ -48,31 +48,52 @@ function PropertyScopeSelector() {
   const { propertyId, property, setPropertyScope, clearPropertyScope } = usePropertyScope();
   const location = useLocation();
   const [properties, setProperties] = useState([]);
+  // Distinct from properties.length === 0 — that's ambiguous between "the
+  // fetch hasn't resolved yet" (must not clear scope, or every fresh page
+  // load would briefly flash-clear a valid selection) and "the fetch
+  // resolved and this member genuinely has zero accessible Properties
+  // right now" (must clear scope, this is exactly the "Admin just revoked
+  // my access" recovery case). This flag is what lets the effect below
+  // tell those two apart.
+  const [propertiesLoaded, setPropertiesLoaded] = useState(false);
 
   // Refetches on every navigation (not just once on mount) so a Property
-  // archived or restored from Settings is reflected here as soon as the
-  // user navigates anywhere else — Sidebar never unmounts, so without this
-  // the option list could otherwise stay stale for the rest of the session.
+  // archived or restored from Settings — or a Property Access grant
+  // changed by an Admin — is reflected here as soon as the user navigates
+  // anywhere else. GET /api/properties already only ever returns Properties
+  // the caller may access (see server/authorization/propertyAccess.js), so
+  // this list is also the access-restricted source of truth the recovery
+  // effect below relies on. Sidebar never unmounts, so without refetching
+  // here the option list could otherwise stay stale for the rest of the
+  // session.
   useEffect(() => {
     getProperties()
-      .then(setProperties)
+      .then((data) => {
+        setProperties(data);
+        setPropertiesLoaded(true);
+      })
       .catch(() => {
         // The selector just won't populate — navigation elsewhere in the
         // app still works fine unscoped.
       });
   }, [location.pathname]);
 
-  // Two jobs, both only meaningful once the (active-only) Properties list
-  // has loaded: backfill the display name when scope was restored from
-  // sessionStorage (id only, no name), and clear scope if it points at a
-  // Property that's no longer active — e.g. archived in a previous session,
-  // so a fresh page load must never leave the selector silently pointing at
-  // something it can't offer as an option. Skipped entirely while the user
-  // is actually on that Property's own Detail page, since an archived
-  // Property is deliberately still inspectable there and sets scope to
-  // itself on every load — this check must never fight that.
+  // Two jobs, both only meaningful once the (accessible, active-only)
+  // Properties list has actually loaded: backfill the display name when
+  // scope was restored from sessionStorage (id only, no name), and clear
+  // scope if it points at a Property no longer in that list — archived in
+  // a previous session, deleted, or (new in Property Access V1) access to
+  // it was revoked, including the case where that leaves zero accessible
+  // Properties at all. A fresh page load must never leave the selector
+  // silently pointing at something it can't offer as an option. Skipped
+  // entirely while the user is actually on that Property's own Detail
+  // page, since an archived-but-still-accessible Property is deliberately
+  // still inspectable there and sets scope to itself on every load — this
+  // check must never fight that. (An inaccessible Property's own Detail
+  // page 404s server-side and never calls setPropertyScope in the first
+  // place, so this guard has nothing to fight in that case either.)
   useEffect(() => {
-    if (!propertyId || properties.length === 0) return;
+    if (!propertyId || !propertiesLoaded) return;
     if (location.pathname.startsWith(`/portfolio/${propertyId}`)) return;
 
     const match = properties.find((p) => p.id === propertyId);
@@ -81,7 +102,7 @@ function PropertyScopeSelector() {
     } else {
       clearPropertyScope();
     }
-  }, [propertyId, property, properties, location.pathname, setPropertyScope, clearPropertyScope]);
+  }, [propertyId, property, properties, propertiesLoaded, location.pathname, setPropertyScope, clearPropertyScope]);
 
   const options = useMemo(() => {
     const opts = [{ value: null, label: "All Properties", sublabel: null }];
@@ -112,6 +133,25 @@ function PropertyScopeSelector() {
 
 export default function Sidebar() {
   const { hasCapability } = useAuth();
+  const { propertyId: scopePropertyId } = usePropertyScope();
+  const location = useLocation();
+
+  // Portfolio is the one nav item whose destination depends on scope: a
+  // specific Property selected means the user is already "inside" that
+  // Property's context, so Portfolio should take them straight to its
+  // Detail/Overview rather than to a redundant one-row directory they'd
+  // have to click through again. "All Properties" still opens the full
+  // directory. See PropertyDetail.jsx for the matching reverse case
+  // (changing scope while already on a Property's Detail page).
+  const portfolioTo = scopePropertyId ? `/portfolio/${scopePropertyId}` : "/portfolio";
+  // Deliberately NOT derived from NavLink's own to-vs-location matching —
+  // that would compare the current URL against portfolioTo, which breaks
+  // the moment they disagree for a legitimate reason (e.g. scope is
+  // Riverbend but the user navigated directly to the bare /portfolio
+  // directory, a fully valid state under Portfolio's Model B filtering).
+  // Portfolio is "active" for this Sidebar whenever the URL is anywhere
+  // under /portfolio, independent of what scope currently is.
+  const portfolioActive = location.pathname === "/portfolio" || location.pathname.startsWith("/portfolio/");
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-line bg-surface">
@@ -127,12 +167,19 @@ export default function Sidebar() {
       <PropertyScopeSelector />
 
       <nav className="flex-1 space-y-0.5 px-3 py-2">
-        {navItems.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} className={linkClasses}>
-            <Icon className="h-[18px] w-[18px]" />
-            {label}
-          </NavLink>
-        ))}
+        {navItems.map(({ to, label, icon: Icon }) =>
+          to === "/portfolio" ? (
+            <Link key={label} to={portfolioTo} className={linkClasses({ isActive: portfolioActive })}>
+              <Icon className="h-[18px] w-[18px]" />
+              {label}
+            </Link>
+          ) : (
+            <NavLink key={label} to={to} className={linkClasses}>
+              <Icon className="h-[18px] w-[18px]" />
+              {label}
+            </NavLink>
+          )
+        )}
       </nav>
 
       {hasCapability(CAPABILITIES.SETTINGS_ACCESS) && (

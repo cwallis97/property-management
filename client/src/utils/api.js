@@ -138,6 +138,14 @@ export function updateMemberRole(membershipId, role) {
   });
 }
 
+// payload: { accessMode: "all" } or { accessMode: "restricted", propertyIds: [...] }
+export function updateMemberPropertyAccess(membershipId, payload) {
+  return apiFetch(`/api/members/${membershipId}/property-access`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 // Invitations — Admin/Owner-only management (create/list/revoke, all
 // implicit to the caller's own Company) plus the two invitee-facing
 // redemption calls, which key off the invitation's token rather than any

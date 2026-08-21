@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { Op } from "sequelize";
-import { Invitation, Membership, User, Company, INVITE_ROLES } from "../models/index.js";
+import { sequelize, Invitation, Membership, User, Company, Property, PropertyAccess, INVITE_ROLES } from "../models/index.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -43,6 +43,10 @@ function serializeInvite(invitation) {
     invitedBy: invitation.invitedBy
       ? { id: invitation.invitedBy.id, name: invitation.invitedBy.displayName || invitation.invitedBy.email }
       : null,
+    // null = All Properties (the default), matching every other
+    // null-means-unrestricted convention in Property Access V1. Only ever
+    // consulted at acceptance — see acceptInvite.
+    propertyIds: invitation.propertyIds ?? null,
   };
 }
 
@@ -63,7 +67,7 @@ export async function createInvite(req, res) {
   const companyId = req.companyIds[0];
   if (!requireCapability(req, res, companyId, CAPABILITIES.USERS_MANAGE)) return;
 
-  const { email: rawEmail, role } = req.body;
+  const { email: rawEmail, role, propertyIds: rawPropertyIds } = req.body;
   const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
 
   if (!email || !EMAIL_RE.test(email)) {
@@ -71,6 +75,29 @@ export async function createInvite(req, res) {
   }
   if (!INVITE_ROLES.includes(role)) {
     return res.status(400).json({ error: `role must be one of: ${INVITE_ROLES.join(", ")}` });
+  }
+
+  // propertyIds is optional and only meaningful for a Manager/Technician
+  // invite — undefined/null means "All Properties" (the default, same as
+  // Membership.accessMode's own default), matching the smallest-safe-
+  // workflow recommendation: a plain invite with no property selection
+  // still works exactly as before this milestone. An Admin invite may
+  // never carry a restriction — Admin is always unrestricted (see
+  // propertyAccess.js) regardless of what a client sends.
+  let propertyIds = null;
+  if (role !== "admin" && rawPropertyIds !== undefined && rawPropertyIds !== null) {
+    if (!Array.isArray(rawPropertyIds) || rawPropertyIds.length === 0) {
+      return res.status(400).json({ error: "Select at least one property, or choose All Properties." });
+    }
+    const uniqueIds = [...new Set(rawPropertyIds)];
+    if (uniqueIds.some((id) => !isValidUUID(id))) {
+      return res.status(400).json({ error: "Invalid property id." });
+    }
+    const owned = await Property.findAll({ where: { id: { [Op.in]: uniqueIds }, companyId }, attributes: ["id"] });
+    if (owned.length !== uniqueIds.length) {
+      return res.status(400).json({ error: "One or more properties are invalid." });
+    }
+    propertyIds = uniqueIds;
   }
 
   // Already a member of this Company under that email?
@@ -95,6 +122,7 @@ export async function createInvite(req, res) {
     companyId,
     email,
     role,
+    propertyIds,
     token: generateToken(),
     invitedByUserId: req.user.id,
     expiresAt: new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
@@ -177,12 +205,49 @@ export async function acceptInvite(req, res) {
   // Idempotent against a duplicate Membership — if this exact User is
   // somehow already a member of this Company (e.g. a second accept
   // attempt, or they'd already joined some other way), never create a
-  // second row; just let acceptance still mark the invitation used.
-  const existingMembership = await Membership.findOne({
+  // second row; just let acceptance still mark the invitation used. An
+  // already-existing Membership's access is left exactly as it is — this
+  // path is about NEW membership creation only, never silently changing
+  // access for someone who already belongs to the Company some other way.
+  let existingMembership = await Membership.findOne({
     where: { userId: req.user.id, companyId: invitation.companyId },
   });
+
   if (!existingMembership) {
-    await Membership.create({ userId: req.user.id, companyId: invitation.companyId, role: invitation.role });
+    // Re-validated against the Company now, not trusted as still-true from
+    // whenever the invite was created — a selected Property could have
+    // been removed in the meantime. propertyIds is never blindly trusted:
+    // an empty valid set (everything originally selected is now gone)
+    // fails safely rather than silently falling back to All Properties,
+    // which the inviter never actually chose.
+    let accessMode = "all";
+    let grantedPropertyIds = [];
+    if (invitation.role !== "admin" && Array.isArray(invitation.propertyIds) && invitation.propertyIds.length > 0) {
+      const owned = await Property.findAll({
+        where: { id: { [Op.in]: invitation.propertyIds }, companyId: invitation.companyId },
+        attributes: ["id"],
+      });
+      if (owned.length === 0) {
+        return res.status(409).json({
+          error: "The properties selected for this invitation are no longer available. Ask an admin to send a new invitation.",
+        });
+      }
+      accessMode = "restricted";
+      grantedPropertyIds = owned.map((p) => p.id);
+    }
+
+    await sequelize.transaction(async (t) => {
+      existingMembership = await Membership.create(
+        { userId: req.user.id, companyId: invitation.companyId, role: invitation.role, accessMode },
+        { transaction: t }
+      );
+      if (accessMode === "restricted") {
+        await PropertyAccess.bulkCreate(
+          grantedPropertyIds.map((propertyId) => ({ membershipId: existingMembership.id, propertyId })),
+          { transaction: t }
+        );
+      }
+    });
   }
 
   invitation.acceptedAt = new Date();
@@ -191,6 +256,6 @@ export async function acceptInvite(req, res) {
   res.json({
     companyId: invitation.companyId,
     companyName: invitation.company.name,
-    role: existingMembership ? existingMembership.role : invitation.role,
+    role: existingMembership.role,
   });
 }

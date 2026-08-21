@@ -3,6 +3,7 @@ import { IconX } from "./icons";
 import SearchableSelect from "./SearchableSelect";
 import { DOCUMENT_CATEGORIES } from "../utils/documents";
 import { createDocument, getProperties, getPortfolioAssets, getPortfolioWorkOrders, getVendors } from "../utils/api";
+import { usePropertyScope } from "../context/PropertyScopeContext";
 
 const ATTACHMENT_TYPES = [
   { value: "propertyId", label: "Property" },
@@ -25,6 +26,7 @@ const ACCEPTED_ACCEPT_ATTR = ".pdf,.png,.jpg,.jpeg";
 // backend query, no generic folder system, just "pick the type, then pick
 // the record."
 export default function AddDocumentModal({ attachment, onClose, onCreated }) {
+  const { propertyId: scopePropertyId } = usePropertyScope();
   const [file, setFile] = useState(null);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("other");
@@ -62,6 +64,15 @@ export default function AddDocumentModal({ attachment, onClose, onCreated }) {
         if (cancelled) return;
         setTargetOptions(options);
         setTargetOptionsStatus("ready");
+        // Preselect the current Property scope, but only for the Property
+        // target type — for Asset/Work Order/Vendor there's no single
+        // unambiguous record scope should imply, so those stay unselected.
+        // Only preselects an id actually present in the just-fetched
+        // (access-restricted) options, so a stale/inaccessible scope value
+        // can never be silently offered here.
+        if (targetType === "propertyId" && scopePropertyId && options.some((o) => o.value === scopePropertyId)) {
+          setTargetId(scopePropertyId);
+        }
       })
       .catch(() => {
         if (cancelled) return;
