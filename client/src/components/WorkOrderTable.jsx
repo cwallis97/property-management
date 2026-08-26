@@ -49,6 +49,7 @@ export default function WorkOrderTable({ rows, onRowClick, showPropertyContext =
             {!showPropertyContext && <th className="px-5 py-3">Where</th>}
             <th className="px-5 py-3">Priority</th>
             <th className="px-5 py-3">Status</th>
+            <th className="px-5 py-3">Assigned</th>
             <th className="px-5 py-3">Age</th>
           </tr>
         </thead>
@@ -91,6 +92,14 @@ export default function WorkOrderTable({ rows, onRowClick, showPropertyContext =
                   }`}
                 >
                   {statusLabel[row.status] || row.status}
+                </span>
+              </td>
+              <td className="px-5 py-3">
+                {/* Always the specific person's name, never the generic
+                    role — see Work Order Assignment V1: assignment is to a
+                    Membership, not a role. */}
+                <span className={row.assignee ? "text-ink-secondary" : "text-ink-muted"}>
+                  {row.assignee?.name ?? "Unassigned"}
                 </span>
               </td>
               <td className="px-5 py-3">

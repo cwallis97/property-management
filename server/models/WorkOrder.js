@@ -60,6 +60,13 @@ export function initWorkOrderModel(sequelize) {
         validate: { min: 0, max: 100 },
       },
       archivedAt: { type: DataTypes.DATE, allowNull: true, field: "archived_at" },
+      // Operational ownership — "which specific person is this Work Order
+      // theirs to handle," never a role. References Membership, not User
+      // (see Membership <-> WorkOrder association in models/index.js for
+      // why), and is deliberately independent of Property Access: being
+      // assigned here never grants access to this Work Order's Property,
+      // it only ever means something once that access already exists.
+      assignedMembershipId: { type: DataTypes.UUID, allowNull: true, field: "assigned_membership_id" },
     },
     {
       sequelize,

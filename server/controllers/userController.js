@@ -5,6 +5,11 @@ export function getCurrentUser(req, res) {
       id: m.company.id,
       name: m.company.name,
       role: m.role,
+      // The caller's own Membership id for this Company — self-referential
+      // (never another member's), same trust level as exposing the User's
+      // own id already is. Needed so the frontend can know "which
+      // assignee row is me" for My Work without a separate lookup.
+      membershipId: m.id,
     })),
   });
 }
@@ -34,6 +39,11 @@ export async function updateCurrentUser(req, res) {
       id: m.company.id,
       name: m.company.name,
       role: m.role,
+      // The caller's own Membership id for this Company — self-referential
+      // (never another member's), same trust level as exposing the User's
+      // own id already is. Needed so the frontend can know "which
+      // assignee row is me" for My Work without a separate lookup.
+      membershipId: m.id,
     })),
   });
 }

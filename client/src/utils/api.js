@@ -276,6 +276,14 @@ export function updateWorkOrder(id, payload) {
   });
 }
 
+// Server-authoritative assignee candidates for this specific Work Order —
+// already narrowed to Company members with Property Access to it. Never
+// GET /api/members (Users & Roles' own listing) here; that's gated on a
+// different capability and returns more than an assignee picker needs.
+export function getAssignableMembers(workOrderId) {
+  return apiFetch(`/api/work-orders/${workOrderId}/assignable-members`);
+}
+
 export function getWorkOrderNotes(workOrderId) {
   return apiFetch(`/api/work-orders/${workOrderId}/notes`);
 }

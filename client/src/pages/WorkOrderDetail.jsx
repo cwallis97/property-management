@@ -24,6 +24,7 @@ import {
   createWorkOrderNote,
   getWorkOrderCosts,
   createWorkOrderCost,
+  getAssignableMembers,
 } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import { CAPABILITIES } from "../utils/capabilities";
@@ -162,6 +163,8 @@ export default function WorkOrderDetail() {
   const [assetsStatus, setAssetsStatus] = useState("loading");
   const [vendors, setVendors] = useState([]);
   const [vendorsStatus, setVendorsStatus] = useState("loading");
+  const [assignableMembers, setAssignableMembers] = useState([]);
+  const [assignableMembersStatus, setAssignableMembersStatus] = useState("loading");
 
   // One independent save-state per editable control. `actionSave` is
   // deliberately separate from `statusSave` even though Complete/Reopen
@@ -171,6 +174,7 @@ export default function WorkOrderDetail() {
   // picker didn't actually produce.
   const statusSave = useFieldSave();
   const vendorSave = useFieldSave();
+  const assigneeSave = useFieldSave();
   const actionSave = useFieldSave();
   const descriptionSave = useFieldSave();
 
@@ -255,6 +259,21 @@ export default function WorkOrderDetail() {
         setVendorsStatus("error");
       });
 
+    // Server-authoritative candidate list — already narrowed to Company
+    // members with Property Access to this Work Order's Property; the
+    // frontend never computes assignability itself.
+    setAssignableMembersStatus("loading");
+    getAssignableMembers(workOrderId)
+      .then((data) => {
+        if (cancelled) return;
+        setAssignableMembers(data);
+        setAssignableMembersStatus("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAssignableMembersStatus("error");
+      });
+
     setNotesStatus("loading");
     getWorkOrderNotes(workOrderId)
       .then((data) => {
@@ -294,6 +313,15 @@ export default function WorkOrderDetail() {
   // assigned Vendor is never silently re-submitted and rejected.
   async function applyVendor(nextVendorId) {
     const updated = await vendorSave.run(() => updateWorkOrder(workOrderId, { vendorId: nextVendorId }));
+    if (updated) setWorkOrder(updated);
+  }
+
+  // Same immediate-commit pattern as applyStatus/applyVendor. Operational
+  // ownership only — never touches Property Access, and the server
+  // independently re-validates the chosen Membership on every save
+  // regardless of what this dropdown currently offers.
+  async function applyAssignee(nextMembershipId) {
+    const updated = await assigneeSave.run(() => updateWorkOrder(workOrderId, { assignedMembershipId: nextMembershipId }));
     if (updated) setWorkOrder(updated);
   }
 
@@ -400,6 +428,26 @@ export default function WorkOrderDetail() {
     }
     return options;
   }, [vendors, assignedVendor]);
+
+  // Same "stays visible, isn't offered as a new choice" rule as Vendor
+  // above — if the current assignee has since lost Property Access (see
+  // Property Access V1's Option A: the assignment row itself is never
+  // auto-cleared), assignableMembers server-side won't include them
+  // anymore, but their name must still show here rather than the picker
+  // silently reverting to blank.
+  const assignee = workOrder?.assignee ?? null;
+  const assigneeOptions = useMemo(() => {
+    const options = [{ value: null, label: "Unassigned", sublabel: null }];
+    const seen = new Set();
+    for (const m of assignableMembers) {
+      options.push({ value: m.membershipId, label: m.name, sublabel: null });
+      seen.add(m.membershipId);
+    }
+    if (assignee && !seen.has(assignee.membershipId)) {
+      options.push({ value: assignee.membershipId, label: `${assignee.name} (no longer eligible)`, sublabel: null });
+    }
+    return options;
+  }, [assignableMembers, assignee]);
 
   if (workOrderStatus === "loading") return <SectionSpinner />;
 
@@ -811,6 +859,24 @@ export default function WorkOrderDetail() {
               </Link>
             ) : (
               <p className="text-sm text-ink-muted">No asset linked</p>
+            )}
+          </SidebarSection>
+
+          <SidebarSection title="Assigned to">
+            <SearchableSelect
+              value={assignee?.membershipId ?? null}
+              onChange={applyAssignee}
+              options={assigneeOptions}
+              placeholder="Unassigned"
+              disabled={!canEditWorkOrder || assigneeSave.phase === "saving" || assignableMembersStatus !== "ready"}
+            />
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {assigneeSave.phase === "saving" && <span className="text-xs text-ink-muted">Saving…</span>}
+              {assigneeSave.phase === "saved" && <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Saved</span>}
+            </div>
+            {assigneeSave.phase === "error" && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{assigneeSave.error}</p>}
+            {assignableMembersStatus === "error" && (
+              <p className="mt-1.5 text-xs text-ink-muted">Couldn't load assignable members. Try reloading.</p>
             )}
           </SidebarSection>
 

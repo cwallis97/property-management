@@ -7,13 +7,15 @@ import {
   WorkType,
   WorkOrderCostEntry,
   WorkOrderVendor,
+  Membership,
+  User,
   WORK_ORDER_STATUSES,
   WORK_ORDER_PRIORITIES,
   WORK_ORDER_CATEGORIES,
 } from "../models/index.js";
 import { resolveVendorId } from "./vendorController.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
-import { getAccessiblePropertyIds, requirePropertyAccess } from "../authorization/propertyAccess.js";
+import { getAccessiblePropertyIds, requirePropertyAccess, membershipHasPropertyAccess } from "../authorization/propertyAccess.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -155,6 +157,50 @@ async function resolveWorkTypeId(workTypeId, companyIds) {
   return { workType };
 }
 
+// Validates a candidate assignedMembershipId: must exist and belong to the
+// caller's own company (scoping to companyIds — the caller's companies —
+// is what makes cross-company assignment impossible, the same idiom
+// resolveVendorId/resolveLocationId already use for their own target
+// entities), and — the actual authorization-sensitive check —
+// membershipHasPropertyAccess must confirm this specific member already
+// has Property Access to THIS Work Order's Property. That's a business-
+// rule rejection (400, like resolveVendorId's "inactive vendor" rule),
+// not a tenant-boundary check, so it doesn't need the 404-only-ever
+// convention requirePropertyAccess uses elsewhere. Being assigned NEVER
+// grants access — this only ever narrows to members who already have it.
+// Returns { error } or { membership: Membership|null }.
+async function resolveAssignedMembershipId(assignedMembershipId, property, companyIds) {
+  if (assignedMembershipId === undefined || assignedMembershipId === null) {
+    return { membership: null };
+  }
+  if (!isValidUUID(assignedMembershipId)) {
+    return { error: { status: 400, body: { error: "Invalid assignedMembershipId." } } };
+  }
+
+  const membership = await Membership.findOne({
+    where: { id: assignedMembershipId, companyId: { [Op.in]: companyIds } },
+    include: { model: User, as: "user", attributes: ["id", "email", "displayName"] },
+  });
+  if (!membership) return { error: { status: 404, body: { error: "Member not found." } } };
+
+  const allowed = await membershipHasPropertyAccess(membership, property.id);
+  if (!allowed) {
+    return { error: { status: 400, body: { error: "This member does not have access to this property." } } };
+  }
+
+  return { membership };
+}
+
+// {membershipId, name} | null — deliberately not the full Membership row
+// (no role, no accessMode, no email here). This is the identical minimum
+// shape membershipController's own serializeMember already exposes as
+// "name" (displayName, falling back to email) — nothing new invented.
+function serializeAssignee(membership) {
+  if (!membership) return null;
+  const user = membership.user;
+  return { membershipId: membership.id, name: user.displayName || user.email };
+}
+
 // Shared scalar-field validation for create/update. Returns { error } or
 // { values } containing only the fields that were present in the body.
 function validateScalarFields(body) {
@@ -247,9 +293,10 @@ export async function listWorkOrdersForProperty(req, res) {
 
   const workOrders = await WorkOrder.findAll({
     where: { propertyId: property.id, archivedAt: null },
+    include: { model: Membership, as: "assignee", include: { model: User, as: "user", attributes: ["id", "email", "displayName"] } },
     order: [["createdAt", "ASC"]],
   });
-  res.json(workOrders);
+  res.json(workOrders.map((wo) => ({ ...wo.toJSON(), assignee: serializeAssignee(wo.assignee) })));
 }
 
 // Portfolio-wide operational queue: every non-archived Work Order across
@@ -291,11 +338,16 @@ export async function listWorkOrdersForCompany(req, res) {
         attributes: ["id", "name", "locationId"],
         include: [{ model: Location, as: "location", attributes: ["id", "name"] }],
       },
+      { model: Membership, as: "assignee", include: { model: User, as: "user", attributes: ["id", "email", "displayName"] } },
     ],
     order: [["createdAt", "ASC"]],
   });
 
-  res.json(workOrders);
+  // My Work (client-side, same convention as every other Work Order
+  // filter — Active/Completed/All, Property Scope) needs assignee reduced
+  // to the same minimal {membershipId, name} shape every other Work Order
+  // response uses, not the raw eager-loaded Membership/User rows.
+  res.json(workOrders.map((wo) => ({ ...wo.toJSON(), assignee: serializeAssignee(wo.assignee) })));
 }
 
 export async function createWorkOrder(req, res) {
@@ -383,6 +435,17 @@ async function getVendorsForWorkOrder(workOrderId) {
   return links.map((l) => l.vendor);
 }
 
+// Same enriched-response idiom as getVendorsForWorkOrder — resolves the
+// current assignedMembershipId (if any) into the minimal display shape,
+// never the raw Membership/User rows.
+async function getAssigneeForWorkOrder(assignedMembershipId) {
+  if (!assignedMembershipId) return null;
+  const membership = await Membership.findByPk(assignedMembershipId, {
+    include: { model: User, as: "user", attributes: ["id", "email", "displayName"] },
+  });
+  return serializeAssignee(membership);
+}
+
 export async function getWorkOrder(req, res) {
   if (!isValidUUID(req.params.id)) {
     return res.status(400).json({ error: "Invalid work order id." });
@@ -395,16 +458,18 @@ export async function getWorkOrder(req, res) {
   // totalCost is always derived from the real cost entries, never a
   // stored/editable number — a single aggregate query alongside the normal
   // lookup, not a second source of truth to keep in sync.
-  const [workType, totalCostResult, vendors] = await Promise.all([
+  const [workType, totalCostResult, vendors, assignee] = await Promise.all([
     workOrder.workTypeId ? WorkType.findByPk(workOrder.workTypeId) : null,
     WorkOrderCostEntry.sum("amount", { where: { workOrderId: workOrder.id } }),
     getVendorsForWorkOrder(workOrder.id),
+    getAssigneeForWorkOrder(workOrder.assignedMembershipId),
   ]);
 
   res.json({
     ...workOrder.toJSON(),
     workType,
     vendors,
+    assignee,
     // Same string-vs-number caution as the cost entries themselves: don't
     // trust the driver's aggregate result type, normalize explicitly.
     totalCost: totalCostResult != null ? Number(totalCostResult) : 0,
@@ -490,6 +555,18 @@ export async function updateWorkOrder(req, res) {
     resolvedVendor = vendor;
   }
 
+  // Operational ownership — who this Work Order belongs to, never who may
+  // access its Property (see resolveAssignedMembershipId's own comment).
+  // A present assignedMembershipId REPLACES whatever the current value is
+  // (null clears it) — same "generic update" shape every other scalar
+  // field on this endpoint already uses, no separate assignment endpoint.
+  const { assignedMembershipId } = req.body;
+  if (assignedMembershipId !== undefined) {
+    const { membership, error } = await resolveAssignedMembershipId(assignedMembershipId, property, req.companyIds);
+    if (error) return res.status(error.status).json(error.body);
+    workOrder.assignedMembershipId = membership ? membership.id : null;
+  }
+
   // Same completion invariant as createWorkOrder, plus: staying completed
   // across an unrelated edit (no completedAt in this request) preserves the
   // existing timestamp rather than bumping it to now.
@@ -546,19 +623,63 @@ export async function updateWorkOrder(req, res) {
 
   // Same enriched shape as getWorkOrder — WorkOrderDetail applies whatever
   // this returns directly to its state, so it needs workType/totalCost/
-  // vendors here too or they'd disappear from the page after any edit.
-  const [workType, totalCostResult, vendors] = await Promise.all([
+  // vendors/assignee here too or they'd disappear from the page after any
+  // edit.
+  const [workType, totalCostResult, vendors, assignee] = await Promise.all([
     workOrder.workTypeId ? WorkType.findByPk(workOrder.workTypeId) : null,
     WorkOrderCostEntry.sum("amount", { where: { workOrderId: workOrder.id } }),
     getVendorsForWorkOrder(workOrder.id),
+    getAssigneeForWorkOrder(workOrder.assignedMembershipId),
   ]);
 
   res.json({
     ...workOrder.toJSON(),
     workType,
     vendors,
+    assignee,
     totalCost: totalCostResult != null ? Number(totalCostResult) : 0,
   });
+}
+
+// Server-authoritative "who may this Work Order be assigned to" — never
+// computed by the frontend. Same tenant/property resolution getWorkOrder
+// itself uses, gated on WORK_ORDER_EDIT specifically because that's the
+// exact authorization level required to actually perform an assignment
+// (see updateWorkOrder). Deliberately NOT a reuse of GET /api/members
+// (Users & Roles' own listing): that endpoint is gated on users.manage
+// (Admin/Owner only — a Manager who can edit this Work Order couldn't
+// call it) and returns far more than a picker needs (email, accessMode,
+// full property grant list). This returns only {membershipId, name} for
+// members who actually have Property Access to this Work Order's
+// Property — no role restriction (Owner/Admin/Manager/Technician are all
+// eligible candidates; the only real constraint is Property Access).
+export async function getAssignableMembers(req, res) {
+  if (!isValidUUID(req.params.id)) {
+    return res.status(400).json({ error: "Invalid work order id." });
+  }
+
+  const workOrder = await findOwnedWorkOrder(req.params.id, req.companyIds);
+  if (!workOrder) return res.status(404).json({ error: "Work order not found." });
+  if (!(await requirePropertyAccess(req, res, workOrder.property.companyId, workOrder.propertyId))) return;
+  if (!requireCapability(req, res, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_EDIT)) return;
+
+  const memberships = await Membership.findAll({
+    where: { companyId: workOrder.property.companyId },
+    include: { model: User, as: "user", attributes: ["id", "email", "displayName"] },
+  });
+
+  const eligible = [];
+  for (const membership of memberships) {
+    if (await membershipHasPropertyAccess(membership, workOrder.propertyId)) {
+      eligible.push(serializeAssignee(membership));
+    }
+  }
+
+  // Stable, predictable ordering for a picker — alphabetical, not
+  // Membership creation order.
+  eligible.sort((a, b) => a.name.localeCompare(b.name));
+
+  res.json(eligible);
 }
 
 export async function archiveWorkOrder(req, res) {

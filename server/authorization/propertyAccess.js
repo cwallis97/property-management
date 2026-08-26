@@ -58,3 +58,20 @@ export async function requirePropertyAccess(req, res, companyId, propertyId) {
   res.status(404).json({ error: "Property not found." });
   return false;
 }
+
+// The symmetric question to getAccessiblePropertyIds/requirePropertyAccess
+// above: those answer "can THE CALLER reach this Property"; this answers
+// "can THIS OTHER Membership reach this Property" — needed specifically
+// for Work Order Assignment, where an Admin/Manager (the caller) is
+// choosing whether some OTHER member is a valid assignee. Same underlying
+// PropertyAccess data and semantics, just evaluated from the target
+// Membership's side rather than the caller's — deliberately not a second
+// authorization model. Takes an already-resolved Membership instance
+// (accessMode already in hand) rather than re-fetching, since every call
+// site already has one (it just validated the Membership exists and
+// belongs to the right Company).
+export async function membershipHasPropertyAccess(membership, propertyId) {
+  if (membership.accessMode !== "restricted") return true;
+  const grant = await PropertyAccess.findOne({ where: { membershipId: membership.id, propertyId } });
+  return !!grant;
+}

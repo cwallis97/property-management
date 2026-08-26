@@ -305,6 +305,7 @@ export default function PropertyDetail() {
         ageLabel: wo.status === "completed" ? `Resolved in ${rawAge}` : rawAge,
         overdue: isOverdue(wo),
         createdAtMs: createdAtDate.getTime(),
+        assignee: wo.assignee ?? null,
       };
     });
 

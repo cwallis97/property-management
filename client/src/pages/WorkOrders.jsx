@@ -8,6 +8,7 @@ import WorkOrderViewFilter from "../components/WorkOrderViewFilter";
 import { IconAlertTriangle, IconWrench } from "../components/icons";
 import { getPortfolioWorkOrders } from "../utils/api";
 import { usePropertyScope } from "../context/PropertyScopeContext";
+import { useAuth } from "../context/AuthContext";
 import { formatAge, isOverdue, compareByAttention, filterWorkOrdersByView } from "../utils/workOrders";
 
 // Portfolio-wide operational queue: "across all of my properties, what
@@ -32,6 +33,11 @@ export default function WorkOrders() {
   // exactly what it was when the user left.
   const restored = location.state?.portfolioWorkOrdersState ?? null;
   const { propertyId: scopePropertyId } = usePropertyScope();
+  // My Work is always the CALLER's own Membership for the current
+  // Company — never a browser-supplied id — matching the same
+  // req.user-derived-only rule the server itself enforces for every
+  // Property Access/assignment check.
+  const { membershipId: myMembershipId } = useAuth();
 
   const [view, setView] = useState(restored?.view ?? "active");
 
@@ -99,6 +105,7 @@ export default function WorkOrders() {
         overdue: isOverdue(wo),
         createdAtMs: createdAtDate.getTime(),
         completedAtMs: wo.completedAt ? new Date(wo.completedAt).getTime() : null,
+        assignee: wo.assignee ?? null,
       };
     });
   }, [workOrders]);
@@ -118,19 +125,36 @@ export default function WorkOrders() {
   const urgentCount = scopedRows.filter((row) => row.priority === "urgent" && row.status !== "completed").length;
   const overdueCount = scopedRows.filter((row) => row.overdue).length;
 
+  // My Work is a peer view, not a second axis layered on Active/Completed/
+  // All (see WorkOrderViewFilter's own comment) — every status assigned to
+  // the caller, exactly like "All" is every status portfolio-wide, just
+  // narrowed to assignee instead of narrowed to nothing. Always the
+  // caller's own Membership only — myMembershipId comes from AuthContext
+  // (server-derived from the authenticated session), never a value this
+  // component could be handed from outside. Still composes with Property
+  // Scope via scopedRows above, so "My Work" + a specific Property is
+  // exactly "my assigned work at that Property."
+  //
   // Active/All keep the exact shared compareByAttention ranking so this
   // queue and every property's own Work Orders tab never disagree about
   // what's most urgent. Completed is the one explicit exception — most-
   // recently-completed first is more useful for a "what just got resolved"
   // scan — implemented here as a small local sort, not a change to the
-  // shared attention algorithm's meaning.
+  // shared attention algorithm's meaning. My Work reuses the attention
+  // ranking too — attentionRank already sorts completed items last, so a
+  // finished assignment naturally sinks to the bottom rather than needing
+  // its own sort branch.
   const visibleRows = useMemo(() => {
+    if (view === "my-work") {
+      const mine = myMembershipId ? scopedRows.filter((row) => row.assignee?.membershipId === myMembershipId) : [];
+      return [...mine].sort(compareByAttention);
+    }
     const filtered = filterWorkOrdersByView(scopedRows, view);
     if (view === "completed") {
       return [...filtered].sort((a, b) => (b.completedAtMs ?? 0) - (a.completedAtMs ?? 0));
     }
     return [...filtered].sort(compareByAttention);
-  }, [scopedRows, view]);
+  }, [scopedRows, view, myMembershipId]);
 
   const portfolioWorkOrdersState = { view };
 
@@ -139,7 +163,7 @@ export default function WorkOrders() {
       <PageHeader title="Work Orders" description="What needs attention across your portfolio right now." />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <WorkOrderViewFilter value={view} onChange={setView} />
+        <WorkOrderViewFilter value={view} onChange={setView} includeMyWork />
       </div>
 
       {status === "loading" && <SectionSpinner />}
@@ -173,9 +197,17 @@ export default function WorkOrders() {
           {visibleRows.length === 0 ? (
             <EmptyState
               icon={IconWrench}
-              title={view === "completed" ? "No completed Work Orders yet" : "Nothing active right now"}
+              title={
+                view === "my-work"
+                  ? "Nothing assigned to you right now"
+                  : view === "completed"
+                  ? "No completed Work Orders yet"
+                  : "Nothing active right now"
+              }
               description={
-                view === "completed"
+                view === "my-work"
+                  ? "Work Orders assigned to you will show up here."
+                  : view === "completed"
                   ? "Work Orders will show up here once they're marked complete."
                   : "Every matching Work Order is completed. Check Completed or All to see them."
               }

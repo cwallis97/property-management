@@ -11,7 +11,7 @@ import { roleHasCapability } from "../utils/capabilities";
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [state, setState] = useState({ user: null, role: null, companyId: null, loading: true });
+  const [state, setState] = useState({ user: null, role: null, companyId: null, membershipId: null, loading: true });
 
   // Extracted so both the initial mount fetch and any later "I just changed
   // something you're caching" caller (Organization renaming the Company,
@@ -21,7 +21,16 @@ export function AuthProvider({ children }) {
     return getCurrentUser()
       .then((data) => {
         const company = data.companies?.[0] ?? null;
-        setState({ user: data, role: company?.role ?? null, companyId: company?.id ?? null, loading: false });
+        setState({
+          user: data,
+          role: company?.role ?? null,
+          companyId: company?.id ?? null,
+          // The caller's own Membership id for the current Company — used
+          // by My Work to identify "assigned to me" without a separate
+          // lookup or trusting anything else the browser might claim.
+          membershipId: company?.membershipId ?? null,
+          loading: false,
+        });
       })
       .catch(() => {
         // Fails closed — no role resolved means no capability check ever
@@ -30,7 +39,7 @@ export function AuthProvider({ children }) {
         // GET endpoint is unconditionally open to a Company member), so a
         // failed fetch here only ever affects what CAN be shown, never what
         // can be read.
-        setState({ user: null, role: null, companyId: null, loading: false });
+        setState({ user: null, role: null, companyId: null, membershipId: null, loading: false });
       });
   }, []);
 

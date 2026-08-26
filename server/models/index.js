@@ -93,6 +93,14 @@ WorkOrder.belongsTo(Location, { foreignKey: "locationId", as: "location" });
 Asset.hasMany(WorkOrder, { foreignKey: "assetId", as: "workOrders" });
 WorkOrder.belongsTo(Asset, { foreignKey: "assetId", as: "asset" });
 
+// Operational ownership, not tenant/property authorization — see
+// WorkOrder.assignedMembershipId's own comment. SET NULL (not RESTRICT
+// like the history-preserving associations below): no Membership-removal
+// workflow exists today, but if one is added, a Work Order's existence
+// must never depend on whether its assignee still exists.
+Membership.hasMany(WorkOrder, { foreignKey: "assignedMembershipId", as: "assignedWorkOrders", onDelete: "SET NULL" });
+WorkOrder.belongsTo(Membership, { foreignKey: "assignedMembershipId", as: "assignee" });
+
 // No onDelete hint here (unlike the CASCADE associations above) — the real
 // constraint is RESTRICT, matching the same "protect history" reasoning
 // used for Location's self-referential parentLocationId.
