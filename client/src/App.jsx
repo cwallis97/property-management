@@ -18,7 +18,6 @@ import AppShell from "./layouts/AppShell";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PublicRoute from "./components/PublicRoute";
 import { ThemeProvider } from "./context/ThemeContext";
-import { DEV_BYPASS_AUTH } from "./components/devAuthBypass";
 
 export default function App() {
   return (
@@ -28,12 +27,13 @@ export default function App() {
     <ThemeProvider>
       <Router>
         <Routes>
-          {/* Root → redirect to /login (or /dashboard in dev, since DEV_BYPASS_AUTH
-              skips the login screen entirely for local preview) */}
-          <Route
-            path="/"
-            element={<Navigate to={DEV_BYPASS_AUTH ? "/dashboard" : "/login"} replace />}
-          />
+          {/* Root → redirect to /login. PublicRoute's own real Firebase check
+              then immediately forwards an already-authenticated session on to
+              /dashboard — so a returning signed-in user still lands on
+              Dashboard in one extra (sub-second) hop, while a genuinely
+              unauthenticated visitor actually reaches the Login screen
+              instead of being routed around it. */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
 
           {/* Public routes (redirect if logged in) */}
           <Route
