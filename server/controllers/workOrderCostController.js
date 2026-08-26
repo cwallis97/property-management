@@ -1,8 +1,9 @@
 import { Op } from "sequelize";
 import { WorkOrder, WorkOrderCostEntry, Property, User, Vendor, WORK_ORDER_COST_TYPES } from "../models/index.js";
 import { resolveVendorId } from "./vendorController.js";
-import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
+import { CAPABILITIES } from "../authorization/capabilities.js";
 import { requirePropertyAccess } from "../authorization/propertyAccess.js";
+import { WORK_ORDER_ACTIONS, requireWorkOrderAction } from "../authorization/workOrderActions.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -89,7 +90,7 @@ export async function createWorkOrderCost(req, res) {
   const workOrder = await findOwnedWorkOrder(req.params.workOrderId, req.companyIds);
   if (!workOrder) return res.status(404).json({ error: "Work order not found." });
   if (!(await requirePropertyAccess(req, res, workOrder.property.companyId, workOrder.propertyId))) return;
-  if (!requireCapability(req, res, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_COST_CREATE)) return;
+  if (!requireWorkOrderAction(req, res, workOrder, WORK_ORDER_ACTIONS.ADD_COST, CAPABILITIES.WORK_ORDER_COST_CREATE)) return;
 
   const { type, amount, note, costDate } = req.body;
   if (!WORK_ORDER_COST_TYPES.includes(type)) {

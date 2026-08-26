@@ -1,7 +1,8 @@
 import { Op } from "sequelize";
 import { WorkOrder, WorkOrderNote, Property, User } from "../models/index.js";
-import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
+import { CAPABILITIES } from "../authorization/capabilities.js";
 import { requirePropertyAccess } from "../authorization/propertyAccess.js";
+import { WORK_ORDER_ACTIONS, requireWorkOrderAction } from "../authorization/workOrderActions.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_BODY_LENGTH = 4000;
@@ -57,7 +58,7 @@ export async function createWorkOrderNote(req, res) {
   const workOrder = await findOwnedWorkOrder(req.params.workOrderId, req.companyIds);
   if (!workOrder) return res.status(404).json({ error: "Work order not found." });
   if (!(await requirePropertyAccess(req, res, workOrder.property.companyId, workOrder.propertyId))) return;
-  if (!requireCapability(req, res, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_NOTE_CREATE)) return;
+  if (!requireWorkOrderAction(req, res, workOrder, WORK_ORDER_ACTIONS.ADD_NOTE, CAPABILITIES.WORK_ORDER_NOTE_CREATE)) return;
 
   const { body } = req.body;
   if (typeof body !== "string" || !body.trim()) {

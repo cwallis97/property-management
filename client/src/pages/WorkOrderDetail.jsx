@@ -140,7 +140,7 @@ function useFieldSave() {
 export default function WorkOrderDetail() {
   const { propertyId, workOrderId } = useParams();
   const location = useLocation();
-  const { hasCapability } = useAuth();
+  const { hasCapability, membershipId } = useAuth();
   const canEditWorkOrder = hasCapability(CAPABILITIES.WORK_ORDER_EDIT);
   const canAddNote = hasCapability(CAPABILITIES.WORK_ORDER_NOTE_CREATE);
   const canAddCost = hasCapability(CAPABILITIES.WORK_ORDER_COST_CREATE);
@@ -487,6 +487,16 @@ export default function WorkOrderDetail() {
   const createdAt = new Date(workOrder.createdAt);
   const isCompleted = workOrder.status === "completed";
 
+  // Technician Work Order Actions V1 — mirrors the server's
+  // canPerformWorkOrderAction exactly (see workOrderActions.js): a caller
+  // with no full-editor capability may still act as the assignee, but only
+  // while they ARE the current assignee and the Work Order isn't
+  // Completed. This is UX-only — the server independently re-derives and
+  // enforces the identical rule on every request regardless of what this
+  // computes.
+  const isAssignedToMe = workOrder.assignee?.membershipId === membershipId;
+  const isAssigneeActor = !canEditWorkOrder && isAssignedToMe && !isCompleted;
+
   // REPORTED is a stable historical fact (time-since-created, always
   // relative to now) — distinct from the resolution-time calculation used
   // for completed work orders below.
@@ -641,7 +651,7 @@ export default function WorkOrderDetail() {
               </div>
             )}
 
-            {canAddNote && (
+            {(canAddNote || isAssigneeActor) && (
               <form onSubmit={handleAddNote} className="mt-4">
                 <textarea
                   value={composerValue}
@@ -700,7 +710,7 @@ export default function WorkOrderDetail() {
               <p className="mb-3 text-sm text-ink-muted">No costs recorded yet.</p>
             )}
 
-            {!canAddCost ? null : !costFormOpen ? (
+            {!(canAddCost || isAssigneeActor) ? null : !costFormOpen ? (
               <button
                 type="button"
                 onClick={() => setCostFormOpen(true)}
@@ -799,7 +809,7 @@ export default function WorkOrderDetail() {
 
         <div className="space-y-6">
           <SidebarSection title="Status">
-            {!isCompleted && canEditWorkOrder ? (
+            {!isCompleted && (canEditWorkOrder || isAssigneeActor) ? (
               <div className="flex flex-wrap items-center gap-2">
                 <div className="inline-flex flex-wrap rounded-lg border border-line bg-surface-subtle p-1">
                   {ACTIVE_WORK_ORDER_STATUSES.map((s) => (
@@ -926,7 +936,7 @@ export default function WorkOrderDetail() {
             {overdue && <p className="text-xs font-medium text-red-600 dark:text-red-400">Overdue</p>}
           </SidebarSection>
 
-          {(canEditWorkOrder || isCompleted) && (
+          {(canEditWorkOrder || isCompleted || isAssigneeActor) && (
           <SidebarSection title="Action">
             {!isCompleted ? (
               <button

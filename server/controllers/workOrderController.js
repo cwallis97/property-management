@@ -14,8 +14,16 @@ import {
   WORK_ORDER_CATEGORIES,
 } from "../models/index.js";
 import { resolveVendorId } from "./vendorController.js";
-import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
+import { CAPABILITIES, requireCapability, hasCapability } from "../authorization/capabilities.js";
 import { getAccessiblePropertyIds, requirePropertyAccess, membershipHasPropertyAccess } from "../authorization/propertyAccess.js";
+import { WORK_ORDER_ACTIONS, canPerformWorkOrderAction } from "../authorization/workOrderActions.js";
+
+// The ONLY field an assigned Technician (no WORK_ORDER_EDIT) may ever
+// submit to updateWorkOrder — see workOrderActions.js. A request from a
+// non-full-editor containing any OTHER key is rejected in its entirety
+// (never partially applied), so a crafted payload can never smuggle a
+// privileged field alongside an allowed one.
+const ASSIGNEE_EDITABLE_FIELDS = new Set(["status"]);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -484,7 +492,26 @@ export async function updateWorkOrder(req, res) {
   const workOrder = await findOwnedWorkOrder(req.params.id, req.companyIds);
   if (!workOrder) return res.status(404).json({ error: "Work order not found." });
   if (!(await requirePropertyAccess(req, res, workOrder.property.companyId, workOrder.propertyId))) return;
-  if (!requireCapability(req, res, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_EDIT)) return;
+
+  // Full editors (Admin/Manager) proceed exactly as before this milestone —
+  // this block only ever adds a SECOND, much narrower path to "allowed",
+  // never widens the first. A non-full-editor must be the current assignee
+  // acting on a not-yet-completed Work Order, AND the request body must
+  // contain nothing outside ASSIGNEE_EDITABLE_FIELDS — checked BEFORE any
+  // field is applied, so a forbidden field anywhere in the body fails the
+  // entire request rather than being silently dropped.
+  if (!hasCapability(req, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_EDIT)) {
+    const outOfScope = Object.keys(req.body).filter((f) => !ASSIGNEE_EDITABLE_FIELDS.has(f));
+    const canActAsAssignee = canPerformWorkOrderAction(
+      req,
+      workOrder,
+      WORK_ORDER_ACTIONS.UPDATE_STATUS,
+      CAPABILITIES.WORK_ORDER_EDIT
+    );
+    if (outOfScope.length > 0 || !canActAsAssignee) {
+      return res.status(403).json({ error: "You do not have permission to do that." });
+    }
+  }
 
   const { error: scalarError, values } = validateScalarFields(req.body);
   if (scalarError) return res.status(scalarError.status).json(scalarError.body);
