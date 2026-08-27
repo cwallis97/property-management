@@ -1,9 +1,10 @@
 import { Op } from "sequelize";
-import { WorkOrder, WorkOrderCostEntry, Property, User, Vendor, WORK_ORDER_COST_TYPES } from "../models/index.js";
+import { sequelize, WorkOrder, WorkOrderCostEntry, Property, User, Vendor, WORK_ORDER_COST_TYPES } from "../models/index.js";
 import { resolveVendorId } from "./vendorController.js";
-import { CAPABILITIES } from "../authorization/capabilities.js";
+import { CAPABILITIES, hasCapability } from "../authorization/capabilities.js";
 import { requirePropertyAccess } from "../authorization/propertyAccess.js";
 import { WORK_ORDER_ACTIONS, requireWorkOrderAction } from "../authorization/workOrderActions.js";
+import { recordAuditEvent, resolveActor } from "../services/auditService.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -116,20 +117,58 @@ export async function createWorkOrderCost(req, res) {
   const { vendor, error: vendorError } = await resolveVendorId(vendorId, req.companyIds);
   if (vendorError) return res.status(vendorError.status).json(vendorError.body);
 
+  // Audit metadata only — not an authorization decision (requireWorkOrderAction
+  // above already made that call).
+  const authorizationPath = hasCapability(req, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_COST_CREATE)
+    ? "full_editor"
+    : "assigned_technician";
+  const actor = resolveActor(req, workOrder.property.companyId);
+  const finalCostDate = costDate || todayDateOnly();
+
   // Author identity always comes from the authenticated session — never
   // from client input. Costs are intentionally allowed on a Work Order in
   // any status, including completed — completion and financial
   // reconciliation are related but separate concerns. costDate defaults to
   // today when omitted, but is always present — Reports will filter on it,
   // so no cost entry may have an unknown expense date.
-  const entry = await WorkOrderCostEntry.create({
-    workOrderId: workOrder.id,
-    createdByUserId: req.user.id,
-    type,
-    amount,
-    note: note || null,
-    costDate: costDate || todayDateOnly(),
-    vendorId: vendor ? vendor.id : null,
+  //
+  // The AuditEvent captures the structured, non-free-text fields (type,
+  // amount, costDate, Vendor id+name) — never the cost entry's own
+  // free-text `note`, the customer-entered-content analog to a Work Order
+  // Note's body, and never Vendor contact details beyond its name.
+  const entry = await sequelize.transaction(async (t) => {
+    const created = await WorkOrderCostEntry.create(
+      {
+        workOrderId: workOrder.id,
+        createdByUserId: req.user.id,
+        type,
+        amount,
+        note: note || null,
+        costDate: finalCostDate,
+        vendorId: vendor ? vendor.id : null,
+      },
+      { transaction: t }
+    );
+    await recordAuditEvent({
+      transaction: t,
+      companyId: workOrder.property.companyId,
+      propertyId: workOrder.propertyId,
+      actor,
+      action: "work_order.cost_created",
+      entityType: "work_order",
+      entityId: workOrder.id,
+      entityLabel: workOrder.title,
+      metadata: {
+        costEntryId: created.id,
+        type,
+        amount,
+        costDate: finalCostDate,
+        vendorId: vendor ? vendor.id : null,
+        vendorName: vendor ? vendor.name : null,
+        authorizationPath,
+      },
+    });
+    return created;
   });
 
   const entryWithAuthor = await WorkOrderCostEntry.findByPk(entry.id, {

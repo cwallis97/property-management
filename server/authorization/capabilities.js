@@ -34,6 +34,13 @@ export const CAPABILITIES = {
   DOCUMENT_MANAGE: "document.manage", // create / edit / replace file / archive
   SITE_PLAN_UPLOAD: "sitePlan.upload",
   USERS_MANAGE: "users.manage", // list Company members, change a member's role
+  // Dedicated, not reused from USERS_MANAGE/SETTINGS_ACCESS — audit-log
+  // visibility is a conceptually distinct, security-sensitive concern
+  // (who may see the Company's change history) from "who may manage
+  // members" or "who may edit Company settings." Keeping it separate now
+  // costs one map entry and leaves room for a future role (an Auditor,
+  // for instance) that can read history without managing anything else.
+  AUDIT_LOG_READ: "auditLog.read",
 };
 
 // Admin/Owner: broad operational access plus Company/Property

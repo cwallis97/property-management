@@ -1,8 +1,9 @@
 import { Op } from "sequelize";
-import { WorkOrder, WorkOrderNote, Property, User } from "../models/index.js";
-import { CAPABILITIES } from "../authorization/capabilities.js";
+import { sequelize, WorkOrder, WorkOrderNote, Property, User } from "../models/index.js";
+import { CAPABILITIES, hasCapability } from "../authorization/capabilities.js";
 import { requirePropertyAccess } from "../authorization/propertyAccess.js";
 import { WORK_ORDER_ACTIONS, requireWorkOrderAction } from "../authorization/workOrderActions.js";
+import { recordAuditEvent, resolveActor } from "../services/auditService.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_BODY_LENGTH = 4000;
@@ -68,12 +69,37 @@ export async function createWorkOrderNote(req, res) {
     return res.status(400).json({ error: `body must be ${MAX_BODY_LENGTH} characters or fewer.` });
   }
 
+  // Audit metadata only — not an authorization decision (requireWorkOrderAction
+  // above already made that call); re-derives which tier the caller acted
+  // through so the Audit Log can distinguish a Manager's edit from a
+  // Technician's narrow assignee-only right.
+  const authorizationPath = hasCapability(req, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_NOTE_CREATE)
+    ? "full_editor"
+    : "assigned_technician";
+  const actor = resolveActor(req, workOrder.property.companyId);
+
   // Author identity always comes from the authenticated session — never
-  // from client input.
-  const note = await WorkOrderNote.create({
-    workOrderId: workOrder.id,
-    authorUserId: req.user.id,
-    body,
+  // from client input. The AuditEvent commits atomically with the Note
+  // itself — never the Note's body/content, only its id (see
+  // auditService.js): the Note is already the durable, append-only source
+  // of what was written; the audit event only answers who/when/where.
+  const note = await sequelize.transaction(async (t) => {
+    const created = await WorkOrderNote.create(
+      { workOrderId: workOrder.id, authorUserId: req.user.id, body },
+      { transaction: t }
+    );
+    await recordAuditEvent({
+      transaction: t,
+      companyId: workOrder.property.companyId,
+      propertyId: workOrder.propertyId,
+      actor,
+      action: "work_order.note_created",
+      entityType: "work_order",
+      entityId: workOrder.id,
+      entityLabel: workOrder.title,
+      metadata: { noteId: created.id, authorizationPath },
+    });
+    return created;
   });
 
   const noteWithAuthor = await WorkOrderNote.findByPk(note.id, {

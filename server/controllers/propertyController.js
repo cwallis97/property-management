@@ -1,7 +1,8 @@
 import { Op } from "sequelize";
-import { Property, Pin, PROPERTY_STATUSES } from "../models/index.js";
+import { sequelize, Property, Pin, PROPERTY_STATUSES } from "../models/index.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 import { getAccessiblePropertyIds, requirePropertyAccess } from "../authorization/propertyAccess.js";
+import { recordAuditEvent, resolveActor } from "../services/auditService.js";
 
 // Defaults to active-only — the same "archived is excluded unless asked
 // for" convention every other list-with-archive-state endpoint in this app
@@ -91,13 +92,45 @@ export async function updateProperty(req, res) {
   // status field (see updateVendor). Never touches any child Location,
   // Asset, Work Order, Cost Entry, or Document; only this row's own status
   // changes, in either direction.
+  const previousStatus = property.status;
   if (status !== undefined) {
     if (!PROPERTY_STATUSES.includes(status)) {
       return res.status(400).json({ error: `status must be one of: ${PROPERTY_STATUSES.join(", ")}` });
     }
     property.status = status;
   }
-  await property.save();
+
+  // Semantic property.archived/property.restored actions, not a generic
+  // property.status_changed — the action name alone fully describes the
+  // transition, so before/after stay null rather than noisy duplicate
+  // JSON (see the Product Bible's own reasoning for this event). Only
+  // fires on a REAL active<->archived transition — a same-status resubmit,
+  // or any other field-only edit that happens not to touch status, is a
+  // no-op here and creates no event.
+  let auditAction = null;
+  if (status !== undefined && status !== previousStatus) {
+    if (status === "archived") auditAction = "property.archived";
+    else if (status === "active") auditAction = "property.restored";
+  }
+
+  if (auditAction) {
+    const actor = resolveActor(req, property.companyId);
+    await sequelize.transaction(async (t) => {
+      await property.save({ transaction: t });
+      await recordAuditEvent({
+        transaction: t,
+        companyId: property.companyId,
+        propertyId: property.id,
+        actor,
+        action: auditAction,
+        entityType: "property",
+        entityId: property.id,
+        entityLabel: property.name,
+      });
+    });
+  } else {
+    await property.save();
+  }
 
   res.json(property);
 }

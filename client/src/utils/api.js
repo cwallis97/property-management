@@ -420,3 +420,13 @@ export async function openDocumentFile(id) {
   window.open(objectUrl, "_blank");
   setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
 }
+
+// Admin/Owner-only (server enforces auditLog.read). companyId is
+// deliberately NOT hardcoded here as "the caller's first Company" — the
+// caller passes whatever Company context it's using (today, AuthContext's
+// single companyId), and the server independently re-validates it's one
+// the caller actually belongs to. cursor/nextCursor are opaque strings
+// round-tripped exactly as returned; never hand-constructed.
+export function getAuditEvents(params) {
+  return apiFetch(`/api/audit-events${toQueryString(params)}`);
+}

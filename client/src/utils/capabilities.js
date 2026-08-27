@@ -22,6 +22,7 @@ export const CAPABILITIES = {
   DOCUMENT_MANAGE: "document.manage",
   SITE_PLAN_UPLOAD: "sitePlan.upload",
   USERS_MANAGE: "users.manage",
+  AUDIT_LOG_READ: "auditLog.read",
 };
 
 const ADMIN_CAPABILITIES = new Set(Object.values(CAPABILITIES));

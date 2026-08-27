@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import {
+  sequelize,
   WorkOrder,
   Location,
   Asset,
@@ -17,6 +18,7 @@ import { resolveVendorId } from "./vendorController.js";
 import { CAPABILITIES, requireCapability, hasCapability } from "../authorization/capabilities.js";
 import { getAccessiblePropertyIds, requirePropertyAccess, membershipHasPropertyAccess } from "../authorization/propertyAccess.js";
 import { WORK_ORDER_ACTIONS, canPerformWorkOrderAction } from "../authorization/workOrderActions.js";
+import { recordAuditEvent, resolveActor } from "../services/auditService.js";
 
 // The ONLY field an assigned Technician (no WORK_ORDER_EDIT) may ever
 // submit to updateWorkOrder — see workOrderActions.js. A request from a
@@ -500,7 +502,8 @@ export async function updateWorkOrder(req, res) {
   // contain nothing outside ASSIGNEE_EDITABLE_FIELDS — checked BEFORE any
   // field is applied, so a forbidden field anywhere in the body fails the
   // entire request rather than being silently dropped.
-  if (!hasCapability(req, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_EDIT)) {
+  const isFullEditor = hasCapability(req, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_EDIT);
+  if (!isFullEditor) {
     const outOfScope = Object.keys(req.body).filter((f) => !ASSIGNEE_EDITABLE_FIELDS.has(f));
     const canActAsAssignee = canPerformWorkOrderAction(
       req,
@@ -512,6 +515,11 @@ export async function updateWorkOrder(req, res) {
       return res.status(403).json({ error: "You do not have permission to do that." });
     }
   }
+  // Audit metadata only — never an authorization decision itself. Only
+  // status_changed can actually occur through both tiers (assignment stays
+  // full-editor-only by construction, since assignedMembershipId isn't in
+  // ASSIGNEE_EDITABLE_FIELDS), but computed once here for reuse below.
+  const authorizationPath = isFullEditor ? "full_editor" : "assigned_technician";
 
   const { error: scalarError, values } = validateScalarFields(req.body);
   if (scalarError) return res.status(scalarError.status).json(scalarError.body);
@@ -587,11 +595,16 @@ export async function updateWorkOrder(req, res) {
   // A present assignedMembershipId REPLACES whatever the current value is
   // (null clears it) — same "generic update" shape every other scalar
   // field on this endpoint already uses, no separate assignment endpoint.
+  // previousAssignedMembershipId is captured before any mutation, purely
+  // for the audit before/after snapshot below.
+  const previousAssignedMembershipId = workOrder.assignedMembershipId;
   const { assignedMembershipId } = req.body;
+  let assigneeAfterForAudit;
   if (assignedMembershipId !== undefined) {
     const { membership, error } = await resolveAssignedMembershipId(assignedMembershipId, property, req.companyIds);
     if (error) return res.status(error.status).json(error.body);
     workOrder.assignedMembershipId = membership ? membership.id : null;
+    assigneeAfterForAudit = serializeAssignee(membership);
   }
 
   // Same completion invariant as createWorkOrder, plus: staying completed
@@ -634,7 +647,59 @@ export async function updateWorkOrder(req, res) {
   if (assetId !== undefined) workOrder.assetId = finalAssetId;
   workOrder.completedAt = finalCompletedAt;
 
-  await workOrder.save();
+  // Real changes only — a request that resubmits the same status or the
+  // same assignee is a no-op and must not create an audit event (see
+  // auditService.js's own no-op-suppression rule, applied identically at
+  // every one of this milestone's mutation points).
+  const assignmentChanged = assignedMembershipId !== undefined && previousAssignedMembershipId !== workOrder.assignedMembershipId;
+  const statusChanged = values.status !== undefined && previousStatus !== finalStatus;
+
+  // Work Order assignment/status changes must commit atomically with their
+  // AuditEvent rows — if the audit insert fails, the whole request fails
+  // and workOrder.save() rolls back too, rather than ever silently
+  // succeeding without the audit trail this milestone promises. Only
+  // workOrder.save() itself needs to be inside this transaction (it's the
+  // one statement these two audited fields are written by); the
+  // WorkOrderVendor swap below is a separate, pre-existing, already
+  // non-transactional step (Vendor changes are not an audited V1 event)
+  // and is deliberately left exactly where it already was, unaffected by
+  // this change.
+  const actor = resolveActor(req, workOrder.property.companyId);
+  await sequelize.transaction(async (t) => {
+    await workOrder.save({ transaction: t });
+
+    if (assignmentChanged) {
+      const beforeAssignee = await getAssigneeForWorkOrder(previousAssignedMembershipId);
+      await recordAuditEvent({
+        transaction: t,
+        companyId: workOrder.property.companyId,
+        propertyId: workOrder.propertyId,
+        actor,
+        action: "work_order.assignment_changed",
+        entityType: "work_order",
+        entityId: workOrder.id,
+        entityLabel: workOrder.title,
+        before: beforeAssignee,
+        after: assigneeAfterForAudit,
+      });
+    }
+
+    if (statusChanged) {
+      await recordAuditEvent({
+        transaction: t,
+        companyId: workOrder.property.companyId,
+        propertyId: workOrder.propertyId,
+        actor,
+        action: "work_order.status_changed",
+        entityType: "work_order",
+        entityId: workOrder.id,
+        entityLabel: workOrder.title,
+        before: { status: previousStatus },
+        after: { status: finalStatus },
+        metadata: { authorizationPath },
+      });
+    }
+  });
 
   // Never deletes a WorkOrderVendor row — marks the previously-current one
   // false instead, so a Vendor's Work History keeps this Work Order even

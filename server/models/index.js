@@ -22,6 +22,7 @@ import { initVendorModel, Vendor, VENDOR_STATUSES } from "./Vendor.js";
 import { initWorkOrderVendorModel, WorkOrderVendor } from "./WorkOrderVendor.js";
 import { initDocumentModel, Document, DOCUMENT_CATEGORIES, DOCUMENT_ALLOWED_MIME_TYPES } from "./Document.js";
 import { initInvitationModel, Invitation, INVITE_ROLES } from "./Invitation.js";
+import { initAuditEventModel, AuditEvent, ENTITY_TYPES, AUDIT_ACTIONS } from "./AuditEvent.js";
 
 initUserModel(sequelize);
 initCompanyModel(sequelize);
@@ -41,6 +42,7 @@ initVendorModel(sequelize);
 initWorkOrderVendorModel(sequelize);
 initDocumentModel(sequelize);
 initInvitationModel(sequelize);
+initAuditEventModel(sequelize);
 
 User.belongsToMany(Company, { through: Membership, foreignKey: "userId", otherKey: "companyId", as: "companies" });
 Company.belongsToMany(User, { through: Membership, foreignKey: "companyId", otherKey: "userId", as: "users" });
@@ -194,6 +196,22 @@ Invitation.belongsTo(Company, { foreignKey: "companyId", as: "company" });
 User.hasMany(Invitation, { foreignKey: "invitedByUserId", as: "sentInvitations", onDelete: "RESTRICT" });
 Invitation.belongsTo(User, { foreignKey: "invitedByUserId", as: "invitedBy" });
 
+// AuditEvent associations — see this table's migration for the FK
+// reasoning (RESTRICT on Company, SET NULL everywhere else). Deliberately
+// no association for entityId — that's a generalized entityType+entityId
+// reference, not a physical FK to any one table (see AuditEvent.js).
+Company.hasMany(AuditEvent, { foreignKey: "companyId", as: "auditEvents", onDelete: "RESTRICT" });
+AuditEvent.belongsTo(Company, { foreignKey: "companyId", as: "company" });
+
+Property.hasMany(AuditEvent, { foreignKey: "propertyId", as: "auditEvents", onDelete: "SET NULL" });
+AuditEvent.belongsTo(Property, { foreignKey: "propertyId", as: "property" });
+
+Membership.hasMany(AuditEvent, { foreignKey: "actorMembershipId", as: "auditEvents", onDelete: "SET NULL" });
+AuditEvent.belongsTo(Membership, { foreignKey: "actorMembershipId", as: "actorMembership" });
+
+User.hasMany(AuditEvent, { foreignKey: "actorUserId", as: "auditEvents", onDelete: "SET NULL" });
+AuditEvent.belongsTo(User, { foreignKey: "actorUserId", as: "actorUser" });
+
 export {
   sequelize,
   User,
@@ -230,4 +248,7 @@ export {
   WORK_ORDER_PRIORITIES,
   Invitation,
   INVITE_ROLES,
+  AuditEvent,
+  ENTITY_TYPES,
+  AUDIT_ACTIONS,
 };

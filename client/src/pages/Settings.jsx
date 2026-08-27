@@ -5,6 +5,7 @@ import SettingsProperties from "../components/SettingsProperties";
 import SettingsUsers from "../components/SettingsUsers";
 import SettingsOrganization from "../components/SettingsOrganization";
 import SettingsAccount from "../components/SettingsAccount";
+import SettingsAuditLog from "../components/SettingsAuditLog";
 import { useAuth } from "../context/AuthContext";
 import { CAPABILITIES } from "../utils/capabilities";
 
@@ -24,6 +25,7 @@ export default function Settings() {
     { key: "properties", label: "Properties", enabled: hasCapability(CAPABILITIES.SETTINGS_ACCESS) },
     { key: "users", label: "Users & Roles", enabled: hasCapability(CAPABILITIES.USERS_MANAGE) },
     { key: "organization", label: "Organization", enabled: hasCapability(CAPABILITIES.SETTINGS_ACCESS) },
+    { key: "audit", label: "Audit Log", enabled: hasCapability(CAPABILITIES.AUDIT_LOG_READ) },
     { key: "account", label: "Account", enabled: true },
   ];
 
@@ -104,6 +106,7 @@ export default function Settings() {
               {effectiveSection === "properties" && <SettingsProperties />}
               {effectiveSection === "users" && <SettingsUsers />}
               {effectiveSection === "organization" && <SettingsOrganization />}
+              {effectiveSection === "audit" && <SettingsAuditLog />}
               {effectiveSection === "account" && <SettingsAccount />}
             </div>
           </div>
