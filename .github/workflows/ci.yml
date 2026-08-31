@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # Ephemeral, CI-only Postgres — not the real dev/prod database, and
+    # this password never leaves this isolated service container, so it
+    # isn't a secret and isn't stored in repo/Actions secrets.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: property_management_test
+          POSTGRES_USER: property_management_test
+          POSTGRES_PASSWORD: ci_test_only_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U property_management_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      # Name contains "test" and this is never equal to a real DATABASE_URL
+      # (which is never set in this job) — satisfies tests/setup.js's
+      # dedicated-test-database guards without weakening them.
+      TEST_DATABASE_URL: postgresql://property_management_test:ci_test_only_password@localhost:5432/property_management_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Backend syntax check
+        working-directory: server
+        run: npm run check:syntax
+
+      - name: Permanent regression/security test suite
+        working-directory: server
+        run: npm test
+
+      - name: Frontend production build
+        working-directory: client
+        run: npm run build
+
+      # Informational only for this milestone — known findings (server
+      # transitive deps, client's unused Firestore/Storage SDK surface)
+      # are tracked for a dedicated dependency-hardening milestone, not
+      # gated here. Output is still surfaced in the log, never hidden.
+      - name: Dependency audit (server, informational)
+        working-directory: server
+        run: npm audit --omit=dev || true
+
+      - name: Dependency audit (client, informational)
+        working-directory: client
+        run: npm audit --omit=dev || true

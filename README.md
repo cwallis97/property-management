@@ -34,3 +34,13 @@ real `DATABASE_URL`, or doesn't look like a test database — see
 `npm run check:syntax` (from `server/`) runs a full `node --check` sweep
 across the backend — the same manual check this project has run by hand
 before every milestone, now scripted.
+
+## Continuous Integration
+
+PRs and pushes to `main` run (`.github/workflows/ci.yml`):
+
+- backend syntax validation
+- the permanent server regression/security test suite, against an
+  isolated, ephemeral Postgres service (never a real dev/prod database)
+- frontend production build
+- an informational dependency audit (does not fail the build)
