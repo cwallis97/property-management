@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:security": "vitest run tests/propertyAccess.test.js tests/workOrderAssignment.test.js tests/technicianWorkOrderActions.test.js tests/auditEvents.test.js tests/workOrderHistory.test.js tests/rolesPermissions.test.js",
+    "check:syntax": "node scripts/check-syntax.js",
     "dev": "nodemon index.js",
     "start": "node index.js",
     "migrate": "node db/migrate.js up",
@@ -29,6 +32,7 @@
     "umzug": "^3.8.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.10",
+    "vitest": "^3.2.7"
   }
 }

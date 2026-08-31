@@ -13,6 +13,7 @@ build/
 .env
 .env.*
 !.env.example
+!.env.test.example
 .vercel
 
 # Uploaded files (local-dev storage; not committed)
