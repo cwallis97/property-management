@@ -16,6 +16,15 @@ function formatMoney(amount) {
   return `$${Number(amount).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
+// Same local-component parsing WorkOrderDetail's own formatDueDate uses for
+// a DATEONLY string ("YYYY-MM-DD") — avoids a UTC/local timezone shift
+// silently rendering the wrong calendar day.
+function formatCostDate(dateOnlyStr) {
+  if (!dateOnlyStr) return null;
+  const [y, m, d] = dateOnlyStr.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 // addedProperties/removedProperties are always [{id, name}], per the
 // server's own point-in-time name-snapshot design (see membershipController's
 // resolvePropertyNameMap) — never re-resolved from a live Property lookup,
@@ -40,26 +49,34 @@ export const AUDIT_CATEGORIES = [
 
 // sentence(event) -> the verb phrase after the actor's name, e.g. actorName
 // + " " + sentence(event) reads as a full clause ("Chris Wallis changed
-// Water Leak - Lot 17's status"). detail(event) -> the before/after line,
-// or null when the action name alone already fully describes what
-// happened (archive/restore, note/cost creation).
+// Water Leak - Lot 17's status") — used by the global, Company-wide Audit
+// Log, where the entity itself isn't already implicit from context.
+// contextualLabel(event) -> a short standalone phrase with NO entity name
+// ("Changed status") — used by a contextual, single-entity timeline (e.g.
+// Work Order History), where the entity is already obvious from where the
+// reader is. detail(event) -> the before/after line, shared by BOTH
+// surfaces unchanged, or null when the action name alone already fully
+// describes what happened (archive/restore, note/cost creation).
 export const AUDIT_EVENT_CONFIG = {
   "work_order.status_changed": {
     category: "work_order",
     label: "Status changed",
     sentence: (e) => `changed ${e.entityLabel ?? "a work order"}'s status`,
+    contextualLabel: () => "Changed status",
     detail: (e) => `${statusLabel[e.before?.status] ?? e.before?.status} → ${statusLabel[e.after?.status] ?? e.after?.status}`,
   },
   "work_order.assignment_changed": {
     category: "work_order",
     label: "Assignment changed",
     sentence: (e) => `changed ${e.entityLabel ?? "a work order"}'s assignment`,
+    contextualLabel: () => "Changed assignment",
     detail: (e) => `${e.before?.name ?? "Unassigned"} → ${e.after?.name ?? "Unassigned"}`,
   },
   "work_order.note_created": {
     category: "work_order",
     label: "Note added",
     sentence: (e) => `added a note to ${e.entityLabel ?? "a work order"}`,
+    contextualLabel: () => "Added a note",
     detail: () => null,
   },
   "work_order.cost_created": {
@@ -70,7 +87,16 @@ export const AUDIT_EVENT_CONFIG = {
       const amount = e.metadata?.amount != null ? formatMoney(e.metadata.amount) : null;
       return amount ? `added a ${amount} ${type} cost to ${e.entityLabel ?? "a work order"}` : `added a ${type} cost to ${e.entityLabel ?? "a work order"}`;
     },
-    detail: (e) => (e.metadata?.vendorName ? `Vendor: ${e.metadata.vendorName}` : null),
+    contextualLabel: (e) => {
+      const type = COST_TYPE_LABEL[e.metadata?.type] ?? e.metadata?.type ?? "cost";
+      const amount = e.metadata?.amount != null ? formatMoney(e.metadata.amount) : null;
+      return amount ? `Added a ${amount} ${type} cost` : `Added a ${type} cost`;
+    },
+    detail: (e) => {
+      const date = formatCostDate(e.metadata?.costDate);
+      const vendor = e.metadata?.vendorName ? `Vendor: ${e.metadata.vendorName}` : null;
+      return [date, vendor].filter(Boolean).join(" · ") || null;
+    },
   },
   "membership.role_changed": {
     category: "membership",
@@ -105,6 +131,16 @@ export const AUDIT_EVENT_CONFIG = {
 export function formatAuditEventLabel(event) {
   const config = AUDIT_EVENT_CONFIG[event.action];
   return config ? config.label : event.action;
+}
+
+// Used by a contextual, single-entity timeline (Work Order History) —
+// short, standalone, no entity name (see AUDIT_EVENT_CONFIG's own
+// comment). Only ever called with work_order.* events in V1 (the
+// contextual endpoint returns nothing else), but falls back to the raw
+// key the same way every other formatter here does, rather than assuming.
+export function formatContextualAuditEventLabel(event) {
+  const config = AUDIT_EVENT_CONFIG[event.action];
+  return config?.contextualLabel ? config.contextualLabel(event) : event.action;
 }
 
 export function formatAuditEventSentence(event) {

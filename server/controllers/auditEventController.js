@@ -6,13 +6,19 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 
-function isValidUUID(value) {
+// Exported — the contextual Work Order History endpoint
+// (workOrderController.js#getWorkOrderHistory) reuses this exact keyset
+// pagination mechanics rather than reimplementing it. Deliberately kept
+// here (not a third shared-utils file) since this module is where the
+// pagination contract for AuditEvent reads is actually defined; the
+// contextual endpoint imports it, not the other way around.
+export function isValidUUID(value) {
   return typeof value === "string" && UUID_RE.test(value);
 }
 
-function clampLimit(raw) {
+export function clampLimit(raw, { defaultLimit = DEFAULT_LIMIT } = {}) {
   const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n) || n <= 0) return DEFAULT_LIMIT;
+  if (!Number.isFinite(n) || n <= 0) return defaultLimit;
   return Math.min(n, MAX_LIMIT);
 }
 
@@ -21,11 +27,20 @@ function clampLimit(raw) {
 // read the caller is already authorized for). {createdAt, id} is the exact
 // keyset the ORDER BY below uses, so decode/encode are each other's
 // mirror image.
-function encodeCursor(row) {
+export function encodeCursor(row) {
   return Buffer.from(JSON.stringify({ createdAt: row.createdAt, id: row.id })).toString("base64url");
 }
 
-function decodeCursor(raw) {
+export function cursorWhereClause(cursor) {
+  return {
+    [Op.or]: [
+      { createdAt: { [Op.lt]: cursor.createdAt } },
+      { [Op.and]: [{ createdAt: cursor.createdAt }, { id: { [Op.lt]: cursor.id } }] },
+    ],
+  };
+}
+
+export function decodeCursor(raw) {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
@@ -113,12 +128,7 @@ export async function listAuditEvents(req, res) {
   const cursor = decodeCursor(query.cursor);
   if (query.cursor && !cursor) return res.status(400).json({ error: "Invalid cursor." });
   if (cursor) {
-    andConditions.push({
-      [Op.or]: [
-        { createdAt: { [Op.lt]: cursor.createdAt } },
-        { [Op.and]: [{ createdAt: cursor.createdAt }, { id: { [Op.lt]: cursor.id } }] },
-      ],
-    });
+    andConditions.push(cursorWhereClause(cursor));
   }
 
   const limit = clampLimit(query.limit);

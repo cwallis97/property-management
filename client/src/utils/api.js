@@ -284,6 +284,15 @@ export function getAssignableMembers(workOrderId) {
   return apiFetch(`/api/work-orders/${workOrderId}/assignable-members`);
 }
 
+// Contextual operational history for this specific Work Order — a
+// deliberately distinct, narrower read than the global Admin/Owner Audit
+// Log (getAuditEvents below): authorized by "can the caller read this
+// Work Order" (Property Access), never auditLog.read. See Product Bible
+// for the full two-surface model.
+export function getWorkOrderHistory(workOrderId, params) {
+  return apiFetch(`/api/work-orders/${workOrderId}/history${toQueryString(params)}`);
+}
+
 export function getWorkOrderNotes(workOrderId) {
   return apiFetch(`/api/work-orders/${workOrderId}/notes`);
 }

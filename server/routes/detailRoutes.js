@@ -10,6 +10,7 @@ import {
   archiveWorkOrder,
   listWorkOrdersForCompany,
   getAssignableMembers,
+  getWorkOrderHistory,
 } from "../controllers/workOrderController.js";
 
 const pinRouter = Router();
@@ -44,5 +45,6 @@ workOrderRouter.get("/:id", getWorkOrder);
 workOrderRouter.put("/:id", updateWorkOrder);
 workOrderRouter.delete("/:id", archiveWorkOrder);
 workOrderRouter.get("/:id/assignable-members", getAssignableMembers);
+workOrderRouter.get("/:id/history", getWorkOrderHistory);
 
 export { pinRouter, repairRouter, locationRouter, assetRouter, workOrderRouter };

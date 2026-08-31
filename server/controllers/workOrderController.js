@@ -10,6 +10,7 @@ import {
   WorkOrderVendor,
   Membership,
   User,
+  AuditEvent,
   WORK_ORDER_STATUSES,
   WORK_ORDER_PRIORITIES,
   WORK_ORDER_CATEGORIES,
@@ -19,6 +20,7 @@ import { CAPABILITIES, requireCapability, hasCapability } from "../authorization
 import { getAccessiblePropertyIds, requirePropertyAccess, membershipHasPropertyAccess } from "../authorization/propertyAccess.js";
 import { WORK_ORDER_ACTIONS, canPerformWorkOrderAction } from "../authorization/workOrderActions.js";
 import { recordAuditEvent, resolveActor } from "../services/auditService.js";
+import { clampLimit, encodeCursor, decodeCursor, cursorWhereClause } from "./auditEventController.js";
 
 // The ONLY field an assigned Technician (no WORK_ORDER_EDIT) may ever
 // submit to updateWorkOrder — see workOrderActions.js. A request from a
@@ -772,6 +774,81 @@ export async function getAssignableMembers(req, res) {
   eligible.sort((a, b) => a.name.localeCompare(b.name));
 
   res.json(eligible);
+}
+
+// {name, role} only — deliberately not membershipId/userId/email. Unlike
+// the global Audit Log's actor shape (which needs to identify the person
+// for filtering/investigation), the contextual timeline is minimized
+// further: the reader already knows which Work Order they're looking at,
+// and doesn't need to correlate an actor across other records.
+function serializeContextualAuditEvent(event) {
+  return {
+    id: event.id,
+    createdAt: event.createdAt,
+    action: event.action,
+    actor: { name: event.actorName, role: event.actorRole },
+    before: event.before,
+    after: event.after,
+    metadata: event.metadata,
+  };
+}
+
+// Contextual Work Order History — deliberately a distinct read path from
+// GET /api/audit-events, not a thinner wrapper around it, because the two
+// have fundamentally different authorization semantics (see the Product
+// Bible): the global Audit Log is Company-wide, security-sensitive, and
+// Admin/Owner-only (auditLog.read); this endpoint answers a narrower
+// question — "may THIS caller read Work Order X" — using the EXACT SAME
+// tenant + Property Access resolution getWorkOrder itself uses, with NO
+// capability check at all, matching that Work Order reads have never been
+// capability-gated (see propertyAccess.js: every GET is already open to
+// any Company member with Property Access). A Technician who can already
+// open this Work Order can already read its history — mutation rights are
+// a separate, unrelated question this endpoint doesn't ask.
+//
+// entityType/entityId are NEVER read from the query string — hard-coded
+// to "work_order" and this resolved Work Order's own id, so the route
+// structurally cannot be used to query any other entity or Work Order;
+// the id in the URL, resolved server-side through the same tenant check
+// as every other Work Order endpoint, is the only input that matters.
+export async function getWorkOrderHistory(req, res) {
+  if (!isValidUUID(req.params.id)) {
+    return res.status(400).json({ error: "Invalid work order id." });
+  }
+
+  const workOrder = await findOwnedWorkOrder(req.params.id, req.companyIds);
+  if (!workOrder) return res.status(404).json({ error: "Work order not found." });
+  if (!(await requirePropertyAccess(req, res, workOrder.property.companyId, workOrder.propertyId))) return;
+
+  const andConditions = [
+    { companyId: workOrder.property.companyId },
+    { entityType: "work_order" },
+    { entityId: workOrder.id },
+  ];
+
+  const cursor = decodeCursor(req.query.cursor);
+  if (req.query.cursor && !cursor) return res.status(400).json({ error: "Invalid cursor." });
+  if (cursor) andConditions.push(cursorWhereClause(cursor));
+
+  // Tighter default than the global log (25 vs 50) — a single Work
+  // Order's history is a much smaller, more focused feed than the
+  // Company-wide one; same MAX_LIMIT cap either way.
+  const limit = clampLimit(req.query.limit, { defaultLimit: 25 });
+
+  const rows = await AuditEvent.findAll({
+    where: { [Op.and]: andConditions },
+    order: [
+      ["createdAt", "DESC"],
+      ["id", "DESC"],
+    ],
+    limit: limit + 1,
+  });
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? encodeCursor(page[page.length - 1]) : null;
+
+  res.json({ events: page.map(serializeContextualAuditEvent), nextCursor });
 }
 
 export async function archiveWorkOrder(req, res) {

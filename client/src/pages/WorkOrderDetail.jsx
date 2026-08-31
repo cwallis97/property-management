@@ -4,7 +4,8 @@ import EmptyState from "../components/EmptyState";
 import SectionSpinner from "../components/SectionSpinner";
 import SearchableSelect from "../components/SearchableSelect";
 import EntityDocuments from "../components/EntityDocuments";
-import { IconAlertTriangle, IconArrowLeft, IconWrench } from "../components/icons";
+import WorkOrderHistoryPanel from "../components/WorkOrderHistoryPanel";
+import { IconAlertTriangle, IconArrowLeft, IconWrench, IconActivity } from "../components/icons";
 import { priorityBadge, statusBadge, statusLabel } from "../components/WorkOrderTable";
 import {
   formatAge,
@@ -156,6 +157,12 @@ export default function WorkOrderDetail() {
   const [workOrder, setWorkOrder] = useState(null);
   const [workOrderStatus, setWorkOrderStatus] = useState("loading"); // loading | error | not-found | ready
   const [workOrderError, setWorkOrderError] = useState(null);
+  // No capability/role gate here at all, deliberately — the server's own
+  // read authorization for GET /api/work-orders/:id/history is identical
+  // to the one that already let this page load in the first place (tenant
+  // + Property Access, no capability check). Anyone who can see this page
+  // can open its History.
+  const [showHistory, setShowHistory] = useState(false);
 
   const [locations, setLocations] = useState([]);
   const [locationsStatus, setLocationsStatus] = useState("loading");
@@ -514,32 +521,45 @@ export default function WorkOrderDetail() {
       <BackLink to={backTo} state={backTabState} label={backLabel} />
 
       {/* SITUATION HEADER — what is wrong, where, how serious, what state */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight text-ink">{workOrder.title}</h1>
-        <p className="mt-1.5 text-base text-ink-secondary">{locationLabel ?? "Property-level"}</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-ink">{workOrder.title}</h1>
+          <p className="mt-1.5 text-base text-ink-secondary">{locationLabel ?? "Property-level"}</p>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span
-            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-              priorityBadge[workOrder.priority] || "bg-surface-subtle text-ink-secondary"
-            }`}
-          >
-            {workOrder.priority}
-          </span>
-          <span
-            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-              statusBadge[workOrder.status] || "bg-surface-subtle text-ink-secondary"
-            }`}
-          >
-            {statusLabel[workOrder.status] || workOrder.status}
-          </span>
-          {overdue && (
-            <span className="rounded-full bg-red-50 dark:bg-red-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-red-600 dark:text-red-400 ring-1 ring-inset ring-red-100 dark:ring-red-500/20">
-              Overdue
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                priorityBadge[workOrder.priority] || "bg-surface-subtle text-ink-secondary"
+              }`}
+            >
+              {workOrder.priority}
             </span>
-          )}
+            <span
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                statusBadge[workOrder.status] || "bg-surface-subtle text-ink-secondary"
+              }`}
+            >
+              {statusLabel[workOrder.status] || workOrder.status}
+            </span>
+            {overdue && (
+              <span className="rounded-full bg-red-50 dark:bg-red-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-red-600 dark:text-red-400 ring-1 ring-inset ring-red-100 dark:ring-red-500/20">
+                Overdue
+              </span>
+            )}
+          </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowHistory(true)}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink-secondary transition hover:bg-surface-subtle hover:text-ink"
+        >
+          <IconActivity className="h-4 w-4" />
+          History
+        </button>
       </div>
+
+      {showHistory && <WorkOrderHistoryPanel workOrderId={workOrderId} onClose={() => setShowHistory(false)} />}
 
       {/* ATTENTION — only for work orders that actually need it, derived
           entirely from real data (priority + dueDate), never decorative. */}
