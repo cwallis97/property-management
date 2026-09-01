@@ -21,7 +21,10 @@ import { ensureUploadDir as ensureSitePlanUploadDir } from "./utils/sitePlanStor
 import { ensureUploadDir as ensureDocumentUploadDir } from "./utils/documentStorage.js";
 
 const app = express();
-app.use(cors());
+// CORS_ORIGIN: comma-separated allowlist (e.g. Vercel staging URL). Falls
+// back to permissive for local dev if unset.
+const allowedOrigins = (process.env.CORS_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
+app.use(cors(allowedOrigins.length ? { origin: allowedOrigins } : {}));
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
