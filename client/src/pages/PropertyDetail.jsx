@@ -6,6 +6,7 @@ import SectionSpinner from "../components/SectionSpinner";
 import Breadcrumb from "../components/Breadcrumb";
 import LocationList from "../components/LocationList";
 import SitePlanMap from "../components/SitePlanMap";
+import SiteMapHistory from "../components/SiteMapHistory";
 import AssetTable from "../components/AssetTable";
 import WorkOrderTable, { priorityBadge, statusBadge, statusLabel } from "../components/WorkOrderTable";
 import WorkOrderViewFilter from "../components/WorkOrderViewFilter";
@@ -71,6 +72,20 @@ export default function PropertyDetail() {
   // land on (see WorkOrderDetail's back link), so the user doesn't lose
   // their place after finishing an action.
   const [activeTab, setActiveTab] = useState(location.state?.tab ?? "overview");
+  // The Map tab's own Active/History mode — Active is the unchanged,
+  // everyday operational map; History is the filterable spend/repair
+  // analytics view (see SiteMapHistory), gated server-side on
+  // REPORTS_READ. Restored from router state so "View on Site Map" from
+  // Reports (or a Work Order's "Back") lands directly in History mode with
+  // its filters intact, the same return-to-origin pattern as activeTab.
+  const [mapMode, setMapMode] = useState(location.state?.mapMode ?? "active");
+  const canViewMapHistory = hasCapability(CAPABILITIES.REPORTS_READ);
+  // Defensive only — the real boundary is the server (REPORTS_READ on the
+  // report endpoint itself); this just avoids ever showing a Technician a
+  // stale/crafted "history" mode with no way to actually load data.
+  useEffect(() => {
+    if (mapMode === "history" && !canViewMapHistory) setMapMode("active");
+  }, [mapMode, canViewMapHistory]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateAssetModal, setShowCreateAssetModal] = useState(false);
   const [showCreateLocationModal, setShowCreateLocationModal] = useState(false);
@@ -435,6 +450,7 @@ export default function PropertyDetail() {
               // only an Overview metric click should arrive pre-filtered.
               if (tab.key === "assets") setAssetsInitialQuery("");
               if (tab.key === "work-orders") setWorkOrdersAttentionFilter(null);
+              if (tab.key === "map") setMapMode("active");
             }}
             className={`border-b-2 pb-3 text-sm font-medium transition ${
               activeTab === tab.key
@@ -605,13 +621,46 @@ export default function PropertyDetail() {
       )}
 
       {activeTab === "map" && (
-        <SitePlanMap
-          propertyId={propertyId}
-          locations={locations}
-          assets={assets}
-          workOrders={workOrders}
-          onWorkOrderCreated={(created) => setWorkOrders((prev) => [...prev, created])}
-        />
+        <div>
+          <div className="mb-2 inline-flex rounded-lg border border-line bg-surface-subtle p-1">
+            <button
+              type="button"
+              onClick={() => setMapMode("active")}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                mapMode === "active" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
+              }`}
+            >
+              Active
+            </button>
+            {/* Technician lacks REPORTS_READ — the toggle itself is hidden
+                for them (UX only; the real boundary is server-side on the
+                report endpoint), so there's no dead-end click into a mode
+                that can never load data. */}
+            {canViewMapHistory && (
+              <button
+                type="button"
+                onClick={() => setMapMode("history")}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                  mapMode === "history" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
+                }`}
+              >
+                History
+              </button>
+            )}
+          </div>
+
+          {mapMode === "active" ? (
+            <SitePlanMap
+              propertyId={propertyId}
+              locations={locations}
+              assets={assets}
+              workOrders={workOrders}
+              onWorkOrderCreated={(created) => setWorkOrders((prev) => [...prev, created])}
+            />
+          ) : (
+            <SiteMapHistory propertyId={propertyId} restored={location.state?.historyFilters ?? null} />
+          )}
+        </div>
       )}
 
       {activeTab === "locations" && (

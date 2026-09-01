@@ -1,50 +1,37 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import SectionSpinner from "../components/SectionSpinner";
-import ReportSpendMap from "../components/ReportSpendMap";
+import MaintenanceSpendReport from "../components/MaintenanceSpendReport";
+import DateRangeControl from "../components/DateRangeControl";
 import { statusBadge, statusLabel } from "../components/WorkOrderTable";
-import { IconAlertTriangle, IconWrench } from "../components/icons";
-import { getMaintenanceSpendSummary, getMaintenanceSpendWorkOrders } from "../utils/api";
+import { IconAlertTriangle, IconWrench, IconChevronDown } from "../components/icons";
+import { getWorkTypes } from "../utils/api";
+import { useOperationalReport } from "../utils/operationalReport";
 import { usePropertyScope } from "../context/PropertyScopeContext";
+import { useDateRangeFilter, formatRangeLabel } from "../utils/useDateRangeFilter";
+import { WORK_ORDER_CATEGORIES } from "../utils/workOrders";
 
-const RANGE_OPTIONS = [
-  { value: "last_30_days", label: "Last 30 Days" },
-  { value: "last_90_days", label: "Last 90 Days" },
-  { value: "ytd", label: "Year to Date" },
-  { value: "last_12_months", label: "Last 12 Months" },
-  { value: "all_time", label: "All Time" },
+const REPORTS_TABS = [
+  { key: "work-orders", label: "Work Orders" },
+  { key: "spend", label: "Maintenance Spend" },
 ];
 
-function pad(n) {
-  return String(n).padStart(2, "0");
-}
+const STATUS_OPTIONS = [
+  { value: "open", label: "Open" },
+  { value: "assigned", label: "Assigned" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "waiting", label: "Waiting" },
+  { value: "completed", label: "Completed" },
+];
 
-function toDateOnly(date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-// Resolves a preset range into concrete { startDate, endDate } using LOCAL
-// calendar days — a single frontend concern, so the backend only ever
-// filters on explicit dates and a future Custom Range needs no backend
-// change at all. All Time omits both bounds entirely.
-function resolveRange(rangeKey) {
-  const today = new Date();
-  const endDate = toDateOnly(today);
-
-  if (rangeKey === "all_time") return { startDate: null, endDate: null };
-
-  const start = new Date(today);
-  if (rangeKey === "last_30_days") start.setDate(start.getDate() - 30);
-  else if (rangeKey === "last_90_days") start.setDate(start.getDate() - 90);
-  else if (rangeKey === "ytd") {
-    start.setMonth(0);
-    start.setDate(1);
-  } else if (rangeKey === "last_12_months") start.setFullYear(start.getFullYear() - 1);
-
-  return { startDate: toDateOnly(start), endDate };
-}
+const SORT_ACCESSORS = {
+  date: (wo) => new Date(wo.createdAt).getTime(),
+  spend: (wo) => wo.spend,
+  status: (wo) => wo.statusLabel,
+  category: (wo) => wo.categoryLabel ?? "",
+};
 
 function formatMoney(amount) {
   return `$${Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -63,327 +50,306 @@ function StatTile({ label, value }) {
   );
 }
 
-// Property filtering is the global Property Scope selector (Sidebar), not
-// a second control here. Entering Reports while Riverbend is selected
-// begins the report in Riverbend context for free (filterParams reads
-// scopePropertyId directly); changing scope while Reports stays mounted
-// re-filters immediately. Because a Category/Work Type drill-down is only
-// meaningful within the property context it was drilled into, an actual
-// scope CHANGE (not the initial mount, which may be restoring a real
-// "back" state — see the ref below) resets the drill back to the root
-// breakdown, the same way goToRoot() already does when a user clicks
-// "Maintenance Spend" in the breadcrumb.
-export default function Reports() {
-  const location = useLocation();
-  // Returning from a Work Order opened out of this report restores exactly
-  // where the user left off — same router-state pattern already used for
-  // every other "back to origin" flow in the app, not a URL/query-param
-  // scheme or browser history. Property is no longer part of this restored
-  // state: it's tracked globally now, and nothing on the round trip to a
-  // Work Order and back ever changes scope, so it's already exactly what
-  // it was when the user left.
-  const restored = location.state?.reportState ?? null;
-  const { propertyId: scopePropertyId } = usePropertyScope();
+function SortHeader({ label, sortKey, sortBy, sortDir, onSort, className = "" }) {
+  const isActive = sortBy === sortKey;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      className={`inline-flex items-center gap-1 text-left text-xs font-medium uppercase tracking-wide text-ink-muted transition hover:text-ink-secondary ${className}`}
+    >
+      {label}
+      {isActive && <IconChevronDown className={`h-3 w-3 transition-transform ${sortDir === "asc" ? "rotate-180" : ""}`} />}
+    </button>
+  );
+}
 
-  const [rangeKey, setRangeKey] = useState(restored?.rangeKey ?? "last_12_months");
-  const [category, setCategory] = useState(restored?.category ?? null);
-  const [categoryLabelText, setCategoryLabelText] = useState(restored?.categoryLabel ?? null);
-  const [workTypeId, setWorkTypeId] = useState(restored?.workTypeId ?? null);
-  const [workTypeLabelText, setWorkTypeLabelText] = useState(restored?.workTypeLabel ?? null);
-  // Map view is only ever meaningful at the Work Order drill level, scoped
-  // to a single property — see the guard effect below, which drops back to
-  // List the moment either condition stops holding (e.g. switching to All
-  // Properties, or drilling back up to Category).
-  const [viewMode, setViewMode] = useState(restored?.viewMode ?? "list");
+// Reports' primary experience: immediate, filterable rows — "Show me all
+// Water / Line Repair Work Orders this year" in one filtering action, no
+// drill-click required. This is the same /api/reports/work-orders dataset
+// Property Site Map's History mode renders spatially — table here, map
+// there, never two independent computations of the same numbers.
+function WorkOrdersReport({ restored }) {
+  const { propertyId: scopePropertyId, property: scopeProperty } = usePropertyScope();
 
-  const [data, setData] = useState(null);
-  const [dataStatus, setDataStatus] = useState("loading"); // loading | error | ready
+  const dateRange = useDateRangeFilter(restored);
+  const [category, setCategory] = useState(restored?.category ?? "");
+  const [workTypeId, setWorkTypeId] = useState(restored?.workTypeId ?? "");
+  const [status, setStatus] = useState(restored?.status ?? "");
+  const [sortBy, setSortBy] = useState(restored?.sortBy ?? "date");
+  const [sortDir, setSortDir] = useState(restored?.sortDir ?? "desc");
 
-  const [workOrders, setWorkOrders] = useState([]);
-  const [workOrdersStatus, setWorkOrdersStatus] = useState("idle"); // idle | loading | error | ready
+  const [workTypes, setWorkTypes] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    getWorkTypes()
+      .then((rows) => {
+        if (!cancelled) setWorkTypes(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const { startDate, endDate } = useMemo(() => resolveRange(rangeKey), [rangeKey]);
+  const visibleWorkTypes = useMemo(() => (category ? workTypes.filter((wt) => wt.category === category) : workTypes), [workTypes, category]);
 
   const filterParams = useMemo(
-    () => ({ startDate, endDate, propertyId: scopePropertyId || undefined, category: category || undefined, workTypeId: workTypeId || undefined }),
-    [startDate, endDate, scopePropertyId, category, workTypeId]
+    () => ({
+      propertyId: scopePropertyId || undefined,
+      startDate: dateRange.startDate || undefined,
+      endDate: dateRange.endDate || undefined,
+      category: category || undefined,
+      workTypeId: workTypeId || undefined,
+      status: status || undefined,
+    }),
+    [scopePropertyId, dateRange.startDate, dateRange.endDate, category, workTypeId, status]
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    setDataStatus("loading");
-    getMaintenanceSpendSummary(filterParams)
-      .then((result) => {
-        if (cancelled) return;
-        setData(result);
-        setDataStatus("ready");
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setDataStatus("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, scopePropertyId, category, workTypeId]);
+  const { data, status: dataStatus } = useOperationalReport(filterParams, { enabled: dateRange.isValid });
 
-  useEffect(() => {
-    if (!workTypeId) {
-      setWorkOrders([]);
-      setWorkOrdersStatus("idle");
-      return;
+  const sortedWorkOrders = useMemo(() => {
+    if (!data) return [];
+    const accessor = SORT_ACCESSORS[sortBy] ?? SORT_ACCESSORS.date;
+    const rows = [...data.workOrders].sort((a, b) => {
+      const av = accessor(a);
+      const bv = accessor(b);
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return rows;
+  }, [data, sortBy, sortDir]);
+
+  function handleSort(key) {
+    if (sortBy === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(key);
+      setSortDir(key === "date" || key === "spend" ? "desc" : "asc");
     }
-    let cancelled = false;
-    setWorkOrdersStatus("loading");
-    getMaintenanceSpendWorkOrders(filterParams)
-      .then((rows) => {
-        if (cancelled) return;
-        setWorkOrders(rows);
-        setWorkOrdersStatus("ready");
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setWorkOrdersStatus("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workTypeId, startDate, endDate, scopePropertyId, category]);
-
-  useEffect(() => {
-    if (viewMode === "map" && (!workTypeId || !scopePropertyId)) setViewMode("list");
-  }, [viewMode, workTypeId, scopePropertyId]);
-
-  function goToRoot() {
-    setCategory(null);
-    setCategoryLabelText(null);
-    setWorkTypeId(null);
-    setWorkTypeLabelText(null);
-    setViewMode("list");
   }
 
-  // Skips the very first run so a real "back to Maintenance Spend" restore
-  // (which legitimately sets category/workTypeId from router state on
-  // mount, while scopePropertyId happens to settle to its initial value at
-  // the same moment) is never immediately clobbered. Only an actual, later
-  // change to global scope resets the drill-down.
-  const isFirstScopeRender = useRef(true);
-  useEffect(() => {
-    if (isFirstScopeRender.current) {
-      isFirstScopeRender.current = false;
-      return;
-    }
-    goToRoot();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopePropertyId]);
+  const workOrdersState = { ...dateRange.toState(), category, workTypeId, status, sortBy, sortDir };
+  const backTabState = { tab: "work-orders", workOrdersState };
 
-  function selectCategory(row) {
-    setCategory(row.key);
-    setCategoryLabelText(row.label);
-    setWorkTypeId(null);
-    setWorkTypeLabelText(null);
-    setViewMode("list");
-  }
-
-  function selectWorkType(row) {
-    setWorkTypeId(row.key);
-    setWorkTypeLabelText(row.label);
-  }
-
-  // Carried into WorkOrderDetail's router state so "← Back to Maintenance
-  // Spend" restores this exact scope — filters, drill depth, view mode, all
-  // (Property itself is implicit via global scope, not part of this).
-  const reportState = {
-    rangeKey,
-    category,
-    categoryLabel: categoryLabelText,
-    workTypeId,
-    workTypeLabel: workTypeLabelText,
-    viewMode,
-  };
-
-  const breakdownLabel = category ? "Work Type" : "Category";
+  const historyHandoffState = { ...dateRange.toState(), category, workTypeId, status, selectedHotspotKey: null };
 
   return (
     <div>
-      <PageHeader title="Maintenance Spend" description="Where maintenance dollars are actually going, traced back to real Work Orders." />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <DateRangeControl
+            rangeKey={dateRange.rangeKey}
+            setRangeKey={dateRange.setRangeKey}
+            customStart={dateRange.customStart}
+            setCustomStart={dateRange.setCustomStart}
+            customEnd={dateRange.customEnd}
+            setCustomEnd={dateRange.setCustomEnd}
+            error={dateRange.error}
+          />
 
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex flex-wrap rounded-lg border border-line bg-surface-subtle p-1">
-          {RANGE_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => setRangeKey(option.value)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                rangeKey === option.value ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
+          <select
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              setWorkTypeId("");
+            }}
+            aria-label="Category"
+            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink"
+          >
+            <option value="">All Categories</option>
+            {WORK_ORDER_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={workTypeId}
+            onChange={(e) => setWorkTypeId(e.target.value)}
+            aria-label="Work Type"
+            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink"
+          >
+            <option value="">All Work Types</option>
+            {visibleWorkTypes.map((wt) => (
+              <option key={wt.id} value={wt.id}>
+                {wt.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            aria-label="Status"
+            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink"
+          >
+            <option value="">All Statuses</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
         </div>
+
+        {scopePropertyId ? (
+          <Link
+            to={`/portfolio/${scopePropertyId}`}
+            state={{ tab: "map", mapMode: "history", historyFilters: historyHandoffState }}
+            className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-secondary transition hover:bg-surface-subtle hover:text-ink"
+          >
+            View on Site Map →
+          </Link>
+        ) : (
+          <span
+            title="Select a single property (Property scope, top of the sidebar) to view these Work Orders on the map."
+            className="cursor-not-allowed rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-muted opacity-50"
+          >
+            View on Site Map →
+          </span>
+        )}
       </div>
 
-      {dataStatus === "loading" && <SectionSpinner />}
+      <p className="mb-4 text-xs text-ink-muted">
+        Property: <span className="font-medium text-ink-secondary">{scopeProperty?.name ?? "All Properties"}</span> — change via the scope selector at the top of the sidebar.
+        {dataStatus === "ready" || dataStatus === "refreshing" ? <> · {formatRangeLabel(dateRange.startDate, dateRange.endDate)}</> : null}
+      </p>
 
-      {dataStatus === "error" && (
-        <EmptyState icon={IconAlertTriangle} title="Couldn't load Maintenance Spend" description="Something went wrong. Please try again." />
+      {!dateRange.isValid && dateRange.rangeKey === "custom" && (
+        <p className="rounded-xl border border-dashed border-line bg-surface px-6 py-10 text-center text-sm text-ink-secondary">{dateRange.error}</p>
       )}
 
-      {dataStatus === "ready" && data && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            <StatTile label="Total Maintenance Spend" value={formatMoney(data.summary.totalSpend)} />
-            <StatTile label="Work Orders With Cost" value={data.summary.workOrdersWithCost} />
-            <StatTile label="Average Cost / Work Order" value={formatMoney(data.summary.averageCostPerWorkOrder)} />
+      {dataStatus === "loading" && <SectionSpinner />}
+      {dataStatus === "error" && <EmptyState icon={IconAlertTriangle} title="Couldn't load Work Orders" description="Something went wrong. Please try again." />}
+
+      {(dataStatus === "ready" || dataStatus === "refreshing") && data && (
+        <div className={`space-y-4 transition-opacity ${dataStatus === "refreshing" ? "pointer-events-none opacity-50" : ""}`} aria-busy={dataStatus === "refreshing"}>
+          <div className="relative grid grid-cols-2 divide-x divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface sm:grid-cols-3 sm:divide-y-0">
+            <StatTile label="Matching Work Orders" value={data.summary.workOrderCount} />
+            <StatTile label="Total Spend" value={formatMoney(data.summary.totalSpend)} />
+            <StatTile label="Locations Represented" value={data.summary.locationsRepresented} />
+            {dataStatus === "refreshing" && (
+              <div className="absolute right-3 top-3 h-4 w-4 animate-spin rounded-full border-2 border-line border-t-accent" aria-hidden="true" />
+            )}
           </div>
-
-          {(category || workTypeId) && (
-            <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-sm">
-              <button type="button" onClick={goToRoot} className="text-ink-secondary transition hover:text-ink">
-                Maintenance Spend
-              </button>
-              {category && (
-                <>
-                  <span className="text-ink-muted">›</span>
-                  {workTypeId ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setWorkTypeId(null);
-                        setWorkTypeLabelText(null);
-                        setViewMode("list");
-                      }}
-                      className="text-ink-secondary transition hover:text-ink"
-                    >
-                      {categoryLabelText}
-                    </button>
-                  ) : (
-                    <span className="font-medium text-ink">{categoryLabelText}</span>
-                  )}
-                </>
-              )}
-              {workTypeId && (
-                <>
-                  <span className="text-ink-muted">›</span>
-                  <span className="font-medium text-ink">{workTypeLabelText}</span>
-                </>
-              )}
-            </nav>
+          {scopePropertyId && (
+            <p className="text-xs text-ink-muted">
+              {data.summary.mappedCount} mapped · {data.summary.unmappedCount} unmapped
+            </p>
           )}
 
-          {!workTypeId && (
-            <div>
-              <h2 className="mb-3 text-sm font-semibold text-ink">{breakdownLabel} Breakdown</h2>
-              {data.breakdown.length === 0 ? (
-                <EmptyState icon={IconWrench} title="No recorded spend in this range" description="Adjust the date range or property scope to see Maintenance Spend." />
-              ) : (
-                <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
-                  {data.breakdown.map((row) => (
-                    <button
-                      key={row.key}
-                      type="button"
-                      onClick={() => (category ? selectWorkType(row) : selectCategory(row))}
-                      className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-surface-subtle"
-                    >
-                      <span className="truncate text-sm font-medium text-ink">{row.label}</span>
-                      <span className="flex shrink-0 items-center gap-4 text-sm">
-                        <span className="text-ink-muted">{row.workOrders} work order{row.workOrders === 1 ? "" : "s"}</span>
-                        <span className="w-24 text-right font-medium text-ink">{formatMoney(row.spend)}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {workTypeId && (
-            <div>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-ink">Work Orders</h2>
-
-                <div className="inline-flex rounded-lg border border-line bg-surface-subtle p-1">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("list")}
-                    className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                      viewMode === "list" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
-                    }`}
-                  >
-                    List
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!scopePropertyId}
-                    title={scopePropertyId ? undefined : "Select a single property (via the Property scope selector) to view Work Orders on the map."}
-                    onClick={() => scopePropertyId && setViewMode("map")}
-                    className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                      viewMode === "map" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
-                    } ${!scopePropertyId ? "cursor-not-allowed opacity-50" : ""}`}
-                  >
-                    Map
-                  </button>
-                </div>
-              </div>
-
-              {!scopePropertyId && (
-                <p className="mb-3 text-xs text-ink-muted">Select a single property (Property scope, top of the sidebar) to view these Work Orders on the map.</p>
-              )}
-
-              {workOrdersStatus === "loading" && <SectionSpinner />}
-              {workOrdersStatus === "error" && (
-                <EmptyState icon={IconAlertTriangle} title="Couldn't load Work Orders" description="Something went wrong. Please try again." />
-              )}
-
-              {workOrdersStatus === "ready" && workOrders.length === 0 && (
-                <EmptyState icon={IconWrench} title="No Work Orders in this range" description="Nothing recorded cost here for the current filters." />
-              )}
-
-              {workOrdersStatus === "ready" && workOrders.length > 0 && viewMode === "list" && (
-                <div className="divide-y divide-line rounded-2xl border border-line bg-surface">
-                  {workOrders.map((wo) => (
-                    <Link
-                      key={wo.id}
-                      to={`/portfolio/${wo.propertyId}/work-orders/${wo.id}`}
-                      state={{ backLabel: "Maintenance Spend", backTo: "/reports", backTabState: { reportState } }}
-                      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-5 py-4 transition hover:bg-surface-subtle"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-ink">{wo.title}</p>
-                        <p className="truncate text-xs text-ink-secondary">
-                          {wo.propertyName}
-                          {wo.locationName && ` · ${wo.locationName}`}
-                          {" · Reported "}
+          {sortedWorkOrders.length === 0 ? (
+            <EmptyState icon={IconWrench} title="No Work Orders match these filters" description="Adjust the date range, category, work type, or status." />
+          ) : (
+            <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
+              <table className="w-full min-w-[840px] border-collapse text-sm">
+                <thead className="sticky top-0 z-10 border-b border-line bg-surface-subtle">
+                  <tr>
+                    {!scopePropertyId && <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wide text-ink-muted text-xs">Property</th>}
+                    <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wide text-ink-muted text-xs">Location</th>
+                    <th className="px-4 py-2.5 text-left font-medium uppercase tracking-wide text-ink-muted text-xs">Work Order</th>
+                    <th className="px-4 py-2.5 text-left">
+                      <SortHeader label="Category" sortKey="category" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-ink-muted">Work Type</th>
+                    <th className="px-4 py-2.5 text-left">
+                      <SortHeader label="Status" sortKey="status" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                    </th>
+                    <th className="px-4 py-2.5 text-left">
+                      <SortHeader label="Date" sortKey="date" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} />
+                    </th>
+                    <th className="px-4 py-2.5 text-right">
+                      <SortHeader label="Spend" sortKey="spend" sortBy={sortBy} sortDir={sortDir} onSort={handleSort} className="justify-end" />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {sortedWorkOrders.map((wo) => (
+                    <tr key={wo.id} className="transition hover:bg-surface-subtle">
+                      {!scopePropertyId && (
+                        <td className="px-4 py-2.5 text-ink-secondary">
+                          <Link to={`/portfolio/${wo.propertyId}/work-orders/${wo.id}`} state={{ backLabel: "Reports", backTo: "/reports", backTabState }} className="block truncate">
+                            {wo.propertyName}
+                          </Link>
+                        </td>
+                      )}
+                      <td className="px-4 py-2.5 text-ink-secondary">
+                        <Link to={`/portfolio/${wo.propertyId}/work-orders/${wo.id}`} state={{ backLabel: "Reports", backTo: "/reports", backTabState }} className="block truncate">
+                          {wo.locationLabel}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5 font-medium text-ink">
+                        <Link to={`/portfolio/${wo.propertyId}/work-orders/${wo.id}`} state={{ backLabel: "Reports", backTo: "/reports", backTabState }} className="block max-w-xs truncate">
+                          {wo.title}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5 text-ink-secondary">
+                        <Link to={`/portfolio/${wo.propertyId}/work-orders/${wo.id}`} state={{ backLabel: "Reports", backTo: "/reports", backTabState }} className="block truncate">
+                          {wo.categoryLabel ?? "—"}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5 text-ink-secondary">
+                        <Link to={`/portfolio/${wo.propertyId}/work-orders/${wo.id}`} state={{ backLabel: "Reports", backTo: "/reports", backTabState }} className="block truncate">
+                          {wo.workTypeLabel ?? "—"}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Link to={`/portfolio/${wo.propertyId}/work-orders/${wo.id}`} state={{ backLabel: "Reports", backTo: "/reports", backTabState }} className="inline-block">
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadge[wo.status] || "bg-surface-subtle text-ink-secondary"}`}>
+                            {wo.statusLabel}
+                          </span>
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5 text-ink-secondary tabular-nums">
+                        <Link to={`/portfolio/${wo.propertyId}/work-orders/${wo.id}`} state={{ backLabel: "Reports", backTo: "/reports", backTabState }} className="block">
                           {formatShortDate(wo.createdAt)}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-3">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadge[wo.status] || "bg-surface-subtle text-ink-secondary"}`}
-                        >
-                          {statusLabel[wo.status] || wo.status}
-                        </span>
-                        <span className="text-right">
-                          <span className="block text-[10px] uppercase tracking-wide text-ink-muted">Spend in Period</span>
-                          <span className="font-medium text-ink">{formatMoney(wo.spendInPeriod)}</span>
-                        </span>
-                      </div>
-                    </Link>
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-medium text-ink tabular-nums">
+                        <Link to={`/portfolio/${wo.propertyId}/work-orders/${wo.id}`} state={{ backLabel: "Reports", backTo: "/reports", backTabState }} className="block">
+                          {formatMoney(wo.spend)}
+                        </Link>
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              )}
-
-              {workOrdersStatus === "ready" && workOrders.length > 0 && viewMode === "map" && scopePropertyId && (
-                <ReportSpendMap propertyId={scopePropertyId} matchingWorkOrders={workOrders} reportState={reportState} />
-              )}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+export default function Reports() {
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(location.state?.tab ?? "work-orders");
+
+  return (
+    <div>
+      <PageHeader title="Reports" description="One authorized Work Order dataset — as organized rows here, and spatially on each Property's Site Map." />
+
+      <div className="mb-6 flex gap-6 border-b border-line">
+        {REPORTS_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`border-b-2 pb-3 text-sm font-medium transition ${
+              activeTab === tab.key ? "border-accent text-ink" : "border-transparent text-ink-secondary hover:text-ink-secondary"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "work-orders" && <WorkOrdersReport restored={location.state?.workOrdersState ?? null} />}
+      {activeTab === "spend" && <MaintenanceSpendReport />}
     </div>
   );
 }

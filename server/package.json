@@ -6,7 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:security": "vitest run tests/propertyAccess.test.js tests/workOrderAssignment.test.js tests/technicianWorkOrderActions.test.js tests/auditEvents.test.js tests/workOrderHistory.test.js tests/rolesPermissions.test.js",
+    "test:security": "vitest run tests/propertyAccess.test.js tests/workOrderAssignment.test.js tests/technicianWorkOrderActions.test.js tests/auditEvents.test.js tests/workOrderHistory.test.js tests/rolesPermissions.test.js tests/workOrdersReport.test.js",
     "check:syntax": "node scripts/check-syntax.js",
     "dev": "nodemon index.js",
     "start": "node index.js",

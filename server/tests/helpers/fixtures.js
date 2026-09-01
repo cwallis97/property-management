@@ -5,7 +5,7 @@
 // Fixture names are always obviously synthetic (QA-prefixed) — never
 // anything resembling real customer data.
 import { randomUUID } from "crypto";
-import { User, Company, Membership, Property, WorkOrder } from "../../models/index.js";
+import { User, Company, Membership, Property, WorkOrder, Location, Asset, WorkOrderCostEntry, WorkType } from "../../models/index.js";
 
 export async function createCompany(name = "QA Company") {
   return Company.create({ name: `${name} ${randomUUID().slice(0, 8)}` });
@@ -44,4 +44,29 @@ export async function createWorkOrder({ property, title = "QA Work Order", ...ov
     priority: "medium",
     ...overrides,
   });
+}
+
+// Deliberately no cleanup.js changes needed for these: locations.property_id
+// and assets.property_id are both real DB-level ON DELETE CASCADE (see
+// their migrations) — cleanupCompanies already destroys every Work Order
+// before the Property itself, so Property.destroy() alone removes any
+// Location/Asset fixtures created through these helpers.
+export async function createLocation({ property, name = "QA Location", type = "unit", ...overrides }) {
+  return Location.create({ propertyId: property.id, name: `${name} ${randomUUID().slice(0, 8)}`, type, ...overrides });
+}
+
+export async function createAsset({ property, name = "QA Asset", ...overrides }) {
+  return Asset.create({ propertyId: property.id, name: `${name} ${randomUUID().slice(0, 8)}`, ...overrides });
+}
+
+export async function createCostEntry({ workOrder, amount, type = "labor", costDate = "2026-01-01", ...overrides }) {
+  return WorkOrderCostEntry.create({ workOrderId: workOrder.id, type, amount, costDate, ...overrides });
+}
+
+// System/global Work Types (companyId: null) are visible to every company —
+// matches how WorkType actually works today (see WorkType.js), so a fixture
+// Work Type never needs to be scoped to a particular QA Company.
+export async function createWorkType({ category = "water", key = "line_repair", label = "QA Line Repair", ...overrides } = {}) {
+  const suffix = randomUUID().slice(0, 8);
+  return WorkType.create({ category, key: `${key}_${suffix}`, label: `${label} ${suffix}`, ...overrides });
 }

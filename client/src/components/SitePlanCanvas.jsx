@@ -22,6 +22,23 @@ const MARKER_TONE_CLASS = {
   default: "bg-blue-600 ring-blue-700",
   completed: "bg-gray-400 ring-gray-500",
   pending: "bg-gray-900 ring-gray-900 animate-pulse",
+  // Distinguishes a grouped hotspot marker (Spatial Reporting) from an
+  // individual Work Order pin — a distinct hue, not just a size change, so
+  // it reads correctly even for a viewer who can't distinguish size alone.
+  hotspot: "bg-violet-600 ring-violet-700",
+  hotspotSelected: "bg-violet-800 ring-violet-900",
+  defaultSelected: "bg-blue-800 ring-blue-900",
+};
+
+// Optional per-marker size tier — additive to the existing fixed-size
+// dot (still the default). Spatial Reporting uses this so a
+// higher-repair-count hotspot reads as visually more prominent, never
+// relying on color/tone alone to communicate that (see marker.badge below
+// for the actual accessible count).
+const MARKER_SIZE_CLASS = {
+  sm: "h-3.5 w-3.5",
+  md: "h-5 w-5",
+  lg: "h-6 w-6",
 };
 
 function clampScale(scale) {
@@ -118,22 +135,52 @@ export default function SitePlanCanvas({
     return <EmptyState icon={IconAlertTriangle} title="Couldn't load the uploaded file" description="Please try replacing the site plan." />;
   }
 
+  const canZoomOut = transform.scale > MIN_SCALE;
+  const canZoomIn = transform.scale < MAX_SCALE;
+  const canReset = transform.scale !== 1 || transform.x !== 0 || transform.y !== 0;
+
   return (
     <div className="relative">
-      <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
-        <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-sm font-medium text-ink-secondary shadow-sm transition hover:bg-surface-subtle">
+      {/* One cohesive toolbar, not three separate floating buttons — same
+          segmented-pill language as this app's other compact controls
+          (date-range presets, mode toggles), just overlaid on the canvas. */}
+      <div className="absolute right-3 top-3 z-10 flex items-center overflow-hidden rounded-lg border border-line bg-surface/95 shadow-sm backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={() => zoomBy(1 / ZOOM_STEP)}
+          disabled={!canZoomOut}
+          title="Zoom out"
+          aria-label="Zoom out"
+          className="flex h-8 w-8 items-center justify-center text-base font-medium text-ink-secondary transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-40"
+        >
           −
         </button>
-        <button type="button" onClick={() => zoomBy(ZOOM_STEP)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-surface text-sm font-medium text-ink-secondary shadow-sm transition hover:bg-surface-subtle">
+        <div className="h-5 w-px bg-line" aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => zoomBy(ZOOM_STEP)}
+          disabled={!canZoomIn}
+          title="Zoom in"
+          aria-label="Zoom in"
+          className="flex h-8 w-8 items-center justify-center text-base font-medium text-ink-secondary transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-40"
+        >
           +
         </button>
-        <button type="button" onClick={resetView} className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink-secondary shadow-sm transition hover:bg-surface-subtle">
-          Reset view
+        <div className="h-5 w-px bg-line" aria-hidden="true" />
+        <button
+          type="button"
+          onClick={resetView}
+          disabled={!canReset}
+          title="Fit to view"
+          aria-label="Fit to view"
+          className="px-2.5 text-xs font-medium text-ink-secondary transition hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Fit
         </button>
       </div>
 
       <div
-        className="flex items-center justify-center overflow-hidden rounded-xl bg-surface-subtle"
+        className="flex items-center justify-center overflow-hidden rounded-xl border border-line bg-surface-subtle"
         style={{ height, cursor: pickMode ? "crosshair" : canPan ? "grab" : "default" }}
         onWheel={handleWheel}
         onPointerDown={handleViewportPointerDown}
@@ -153,16 +200,27 @@ export default function SitePlanCanvas({
               <button
                 key={marker.id}
                 type="button"
+                title={marker.label || undefined}
                 onClick={(e) => {
                   e.stopPropagation();
                   marker.onClick?.();
                 }}
                 style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
-                className={`absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow ring-1 ${
-                  MARKER_TONE_CLASS[marker.tone] || MARKER_TONE_CLASS.default
-                }`}
-                aria-label={marker.label || "Marker"}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow ring-1 transition hover:z-10 hover:scale-110 focus-visible:z-10 focus-visible:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
+                  MARKER_SIZE_CLASS[marker.size] || MARKER_SIZE_CLASS.sm
+                } ${MARKER_TONE_CLASS[marker.tone] || MARKER_TONE_CLASS.default}`}
+                aria-label={marker.badge ? `${marker.label || "Location"}: ${marker.badge} matching Work Orders` : marker.label || "Marker"}
               >
+                {/* Numeric count badge — the accessible, always-visible signal
+                    behind a hotspot's size/color; never encoded via color alone. */}
+                {marker.badge != null && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -right-2 -top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-ink px-1 text-[10px] font-semibold leading-none text-page shadow dark:border-page"
+                  >
+                    {marker.badge > 99 ? "99+" : marker.badge}
+                  </span>
+                )}
                 {marker.popover}
               </button>
             ))}

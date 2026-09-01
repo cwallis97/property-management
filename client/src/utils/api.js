@@ -384,6 +384,13 @@ export function getMaintenanceSpendWorkOrders(params) {
   return apiFetch(`/api/reports/maintenance-spend/work-orders${toQueryString(params)}`);
 }
 
+// Shared by Reports' Work Orders tab and Property Site Map's History mode —
+// same endpoint, same filters, same numbers. propertyId is optional
+// (omitted = Company-wide, matching Maintenance Spend's convention).
+export function getWorkOrdersReport(params) {
+  return apiFetch(`/api/reports/work-orders${toQueryString(params)}`);
+}
+
 // params accepts one optional attachment filter (propertyId | assetId |
 // workOrderId | vendorId) — the same endpoint serves both the global
 // Documents page (no filter) and every EntityDocuments section (one

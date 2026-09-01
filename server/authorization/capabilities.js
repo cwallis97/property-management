@@ -12,11 +12,17 @@
 // code-defined map is easy to read today and easy to extend by adding
 // entries, which is the actual near-term need.
 //
-// V1 intentionally only covers mutations. Every read (GET) endpoint in this
-// app is already open to any authenticated member of the owning Company —
-// that hasn't changed, and "Technician can view Properties/Locations/
-// Assets/Work Orders/Documents/Site Plans" falls out of that unchanged
-// behavior for free. What's new is which roles may write.
+// V1 mostly covers mutations — every other read (GET) endpoint in this app
+// remains open to any authenticated member of the owning Company, and
+// "Technician can view Properties/Locations/Assets/Work Orders/Documents/
+// Site Plans" falls out of that unchanged behavior for free. REPORTS_READ
+// (added for Spatial Reporting/Map Analytics V1) is the first read-side
+// capability: portfolio/Property-wide financial aggregation is materially
+// more sensitive than reading an individual record, so it's gated
+// explicitly rather than inheriting the default-open read convention.
+// Technician's own per-Work-Order cost visibility (through a Work Order
+// they can already read) is untouched by this — REPORTS_READ only governs
+// the aggregate reporting endpoints themselves.
 
 export const CAPABILITIES = {
   SETTINGS_ACCESS: "settings.access",
@@ -41,6 +47,12 @@ export const CAPABILITIES = {
   // costs one map entry and leaves room for a future role (an Auditor,
   // for instance) that can read history without managing anything else.
   AUDIT_LOG_READ: "auditLog.read",
+  // Portfolio/Property-wide reporting (Maintenance Spend, Spatial
+  // Reporting/Map Analytics) — deliberately its own capability, not reused
+  // from AUDIT_LOG_READ (a different concern: change history vs. financial
+  // aggregation) or USERS_MANAGE. Owner/Admin/Manager only; Technician's
+  // read access to an individual Work Order's own costs is untouched.
+  REPORTS_READ: "reports.read",
 };
 
 // Admin/Owner: broad operational access plus Company/Property
@@ -66,6 +78,7 @@ const MANAGER_CAPABILITIES = new Set([
   CAPABILITIES.VENDOR_EDIT,
   CAPABILITIES.DOCUMENT_MANAGE,
   CAPABILITIES.SITE_PLAN_UPLOAD,
+  CAPABILITIES.REPORTS_READ,
 ]);
 
 // Technician: deliberately zero mutation capabilities in V1 — read access

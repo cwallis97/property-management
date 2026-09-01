@@ -47,6 +47,16 @@
   --color-accent: #e5e7eb;
   --color-accent-hover: #ffffff;
   --color-accent-ink: #111827;
+  /* Native browser chrome (date-input calendar icon/picker, scrollbars)
+     otherwise follows the OS's own light/dark preference regardless of
+     this app's own toggle — this makes it follow data-theme instead, so a
+     user in light-OS/dark-app (or the reverse) never gets an
+     unreadable/invisible native calendar icon. */
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {

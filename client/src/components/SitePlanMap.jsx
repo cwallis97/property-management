@@ -182,9 +182,12 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
 
   if (sitePlanStatus === "none") {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line-strong bg-surface px-6 py-16 text-center">
-        <h2 className="text-base font-semibold text-ink">Set Up Property Map</h2>
-        <p className="mt-2 max-w-md text-sm text-ink-secondary">
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line bg-surface px-6 py-24 text-center">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-subtle text-ink-muted">
+          <IconPlus className="h-5 w-5" />
+        </div>
+        <h2 className="text-sm font-semibold text-ink">Set Up Property Map</h2>
+        <p className="mt-1.5 max-w-sm text-sm text-ink-secondary">
           {canUploadSitePlan
             ? "Upload the overhead site plan, property map, or aerial image your team already uses."
             : "No site plan has been uploaded for this property yet."}
@@ -216,8 +219,8 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
   }
 
   return (
-    <div className="rounded-2xl border border-line bg-surface p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+    <div>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         {canCreateWorkOrder ? (
           <button
             type="button"
@@ -258,13 +261,13 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
         )}
       </div>
 
-      {uploadError && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{uploadError}</p>}
+      {uploadError && <p className="mb-2 text-sm text-red-600 dark:text-red-400">{uploadError}</p>}
 
       <SitePlanCanvas
         fileStatus={fileStatus}
         fileUrl={fileUrl}
         fileObjectType={fileObjectType}
-        height="70vh"
+        height="72vh"
         pickMode={reportIssueMode}
         onPick={handlePick}
         pendingPoint={pendingPoint}
