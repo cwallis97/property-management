@@ -156,3 +156,30 @@ export function IconArrowLeft(props) {
     </Icon>
   );
 }
+
+export function IconMapPin(props) {
+  return (
+    <Icon {...props}>
+      <path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10Z" />
+      <circle cx="12" cy="11" r="2.5" />
+    </Icon>
+  );
+}
+
+export function IconUser(props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" />
+    </Icon>
+  );
+}
+
+export function IconCornerDownLeft(props) {
+  return (
+    <Icon {...props}>
+      <path d="M9 10 4 15l5 5" />
+      <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+    </Icon>
+  );
+}

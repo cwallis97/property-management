@@ -3,6 +3,7 @@ import { Document, Property, Asset, WorkOrder, Vendor, User, DOCUMENT_CATEGORIES
 import { saveDocumentFile, deleteDocumentFile, getFilePath, acceptedExtensionsForMimeType } from "../utils/documentStorage.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 import { getAccessiblePropertyIds, requirePropertyAccess } from "../authorization/propertyAccess.js";
+import { buildDocumentAccessOr } from "../authorization/documentAccess.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ATTACHMENT_FIELDS = ["propertyId", "assetId", "workOrderId", "vendorId"];
@@ -194,23 +195,14 @@ export async function listDocuments(req, res) {
   // resolveDocumentPropertyId) — for a restricted member, narrow to
   // Documents attached directly to an accessible Property, an Asset that
   // belongs to one, a Work Order that belongs to one, or (per Property
-  // Access V1's Vendor rule) any Vendor-attached Document at all. Combined
-  // with an explicit attachment-field filter above via plain AND, so
-  // filtering to an inaccessible target correctly yields zero rows rather
-  // than leaking anything.
+  // Access V1's Vendor rule) any Vendor-attached Document at all. The
+  // predicate itself lives in authorization/documentAccess.js so Global
+  // Search reuses the exact same rule. Combined with any explicit
+  // attachment-field filter above via plain AND, so filtering to an
+  // inaccessible target correctly yields zero rows rather than leaking.
   const accessiblePropertyIds = await getAccessiblePropertyIds(req, req.companyIds[0]);
-  if (accessiblePropertyIds) {
-    const [accessibleAssets, accessibleWorkOrders] = await Promise.all([
-      Asset.findAll({ where: { propertyId: { [Op.in]: accessiblePropertyIds } }, attributes: ["id"] }),
-      WorkOrder.findAll({ where: { propertyId: { [Op.in]: accessiblePropertyIds } }, attributes: ["id"] }),
-    ]);
-    where[Op.or] = [
-      { propertyId: { [Op.in]: accessiblePropertyIds } },
-      { assetId: { [Op.in]: accessibleAssets.map((a) => a.id) } },
-      { workOrderId: { [Op.in]: accessibleWorkOrders.map((w) => w.id) } },
-      { vendorId: { [Op.ne]: null } },
-    ];
-  }
+  const accessOr = await buildDocumentAccessOr(accessiblePropertyIds);
+  if (accessOr) where[Op.or] = accessOr;
 
   const documents = await Document.findAll({ where, include: SERIALIZE_INCLUDE, order: [["createdAt", "DESC"]] });
   res.json(documents.map(serializeDocument));

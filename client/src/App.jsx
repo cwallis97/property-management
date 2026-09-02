@@ -9,6 +9,7 @@ import AssetDetail from "./pages/AssetDetail";
 import Assets from "./pages/Assets";
 import WorkOrders from "./pages/WorkOrders";
 import Reports from "./pages/Reports";
+import SearchResults from "./pages/SearchResults";
 import Vendors from "./pages/Vendors";
 import VendorDetail from "./pages/VendorDetail";
 import Documents from "./pages/Documents";
@@ -75,6 +76,7 @@ export default function App() {
             <Route path="/assets" element={<Assets />} />
             <Route path="/work-orders" element={<WorkOrders />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/search" element={<SearchResults />} />
             <Route path="/vendors" element={<Vendors />} />
             <Route path="/vendors/:vendorId" element={<VendorDetail />} />
             <Route path="/documents" element={<Documents />} />

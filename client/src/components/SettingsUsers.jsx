@@ -27,7 +27,7 @@ function formatShortDate(value) {
 // never leave a Company without one). A signed-in Admin's own row is
 // likewise read-only, so this page can never be used to accidentally lock
 // yourself out of Settings mid-session.
-export default function SettingsUsers() {
+export default function SettingsUsers({ focusUserId = null }) {
   const { user } = useAuth();
   const [members, setMembers] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | error | ready
@@ -89,6 +89,14 @@ export default function SettingsUsers() {
       cancelled = true;
     };
   }, []);
+
+  // Arriving here from a Global Search "People" result — scroll that
+  // member's row into view and briefly ring it so the match is obvious.
+  useEffect(() => {
+    if (!focusUserId || status !== "ready") return;
+    const el = document.getElementById(`member-${focusUserId}`);
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focusUserId, status]);
 
   async function handleRoleChange(member, role) {
     setPendingId(member.membershipId);
@@ -172,7 +180,10 @@ export default function SettingsUsers() {
             return (
               <div
                 key={member.membershipId}
-                className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                id={`member-${member.userId}`}
+                className={`flex flex-col gap-2 px-5 py-4 transition sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${
+                  focusUserId === member.userId ? "bg-surface-subtle ring-2 ring-inset ring-accent" : ""
+                }`}
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-ink">

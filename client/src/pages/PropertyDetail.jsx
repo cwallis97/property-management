@@ -70,8 +70,10 @@ export default function PropertyDetail() {
   const { hasCapability } = useAuth();
   // Returning from a Work Order's detail page passes back which tab to
   // land on (see WorkOrderDetail's back link), so the user doesn't lose
-  // their place after finishing an action.
+  // their place after finishing an action. Global Search's Location
+  // results land here too — tab "locations" plus a Location id to focus.
   const [activeTab, setActiveTab] = useState(location.state?.tab ?? "overview");
+  const focusLocationId = location.state?.focusLocationId ?? null;
   // The Map tab's own Active/Analyze mode — Active is the unchanged,
   // everyday operational map; Analyze is active filtering / spend /
   // repeat-repair analysis (see SiteMapAnalyze), gated server-side on
@@ -208,6 +210,14 @@ export default function PropertyDetail() {
       cancelled = true;
     };
   }, [propertyId, setPropertyScope]);
+
+  // Scroll a Global-Search-focused Location into view once the Locations
+  // list has rendered (LocationList also rings the matching row).
+  useEffect(() => {
+    if (!focusLocationId || activeTab !== "locations" || locationsStatus !== "ready") return;
+    const el = document.getElementById(`location-row-${focusLocationId}`);
+    if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focusLocationId, activeTab, locationsStatus]);
 
   // The reverse of the effect above: that one sets scope TO this route's
   // Property once it loads (so afterward scopePropertyId === propertyId,
@@ -701,7 +711,7 @@ export default function PropertyDetail() {
                 />
               )}
 
-              {locations.length > 0 && <LocationList locations={locations} />}
+              {locations.length > 0 && <LocationList locations={locations} focusLocationId={focusLocationId} />}
             </>
           )}
         </div>

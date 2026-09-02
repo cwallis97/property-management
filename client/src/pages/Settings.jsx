@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import SectionSpinner from "../components/SectionSpinner";
 import SettingsProperties from "../components/SettingsProperties";
@@ -11,7 +12,11 @@ import { CAPABILITIES } from "../utils/capabilities";
 
 export default function Settings() {
   const { hasCapability, loading } = useAuth();
-  const [activeSection, setActiveSection] = useState("properties");
+  const location = useLocation();
+  // Global Search (and any other in-app deep link) can land here on a
+  // specific section, optionally with a specific member row to focus.
+  const [activeSection, setActiveSection] = useState(location.state?.section ?? "properties");
+  const focusUserId = location.state?.focusUserId ?? null;
 
   // All four sections are real now — nothing here is a placeholder.
   // Properties/Organization share settings.access (the same Admin/Owner
@@ -104,7 +109,7 @@ export default function Settings() {
 
             <div className="min-w-0">
               {effectiveSection === "properties" && <SettingsProperties />}
-              {effectiveSection === "users" && <SettingsUsers />}
+              {effectiveSection === "users" && <SettingsUsers focusUserId={focusUserId} />}
               {effectiveSection === "organization" && <SettingsOrganization />}
               {effectiveSection === "audit" && <SettingsAuditLog />}
               {effectiveSection === "account" && <SettingsAccount />}

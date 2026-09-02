@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { auth } from "../firebase";
 import { signOut } from "firebase/auth";
-import { IconSearch, IconBell, IconPlus, IconChevronDown } from "../components/icons";
+import { IconBell, IconPlus, IconChevronDown } from "../components/icons";
+import GlobalSearch from "../components/GlobalSearch";
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -37,20 +38,11 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b border-line bg-surface/80 px-8 backdrop-blur">
-      {/* Search and New are not wired to anything yet — disabled and
-          muted rather than styled as live primary actions, so they read as
-          "not built" instead of "broken." No ⌘K hint for a shortcut that
-          doesn't exist. */}
-      <div className="relative w-full max-w-sm">
-        <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-        <input
-          type="text"
-          disabled
-          placeholder="Search coming soon"
-          className="w-full cursor-not-allowed rounded-lg border border-line bg-surface-subtle py-2 pl-9 pr-3 text-sm text-ink-muted placeholder:text-ink-muted"
-        />
-      </div>
+      <GlobalSearch />
 
+      {/* New is not wired to anything yet — disabled and muted rather than
+          styled as a live primary action, so it reads as "not built"
+          instead of "broken." */}
       <div className="flex items-center gap-2">
         <button
           type="button"

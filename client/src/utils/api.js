@@ -384,11 +384,19 @@ export function getMaintenanceSpendWorkOrders(params) {
   return apiFetch(`/api/reports/maintenance-spend/work-orders${toQueryString(params)}`);
 }
 
-// Shared by Reports' Work Orders tab and Property Site Map's History mode —
+// Shared by Reports' Work Orders tab and Property Site Map's Analyze mode —
 // same endpoint, same filters, same numbers. propertyId is optional
 // (omitted = Company-wide, matching Maintenance Spend's convention).
 export function getWorkOrdersReport(params) {
   return apiFetch(`/api/reports/work-orders${toQueryString(params)}`);
+}
+
+// Global Search (GET /api/search). `params` = { q, limit, type?, offset? }.
+// `options` forwards through apiFetch to fetch — pass { signal } from an
+// AbortController so an in-flight search is cancelled the moment the query
+// text changes again.
+export function globalSearch(params, options) {
+  return apiFetch(`/api/search${toQueryString(params)}`, options);
 }
 
 // params accepts one optional attachment filter (propertyId | assetId |

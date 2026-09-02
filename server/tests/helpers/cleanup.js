@@ -14,6 +14,7 @@
 import { Op } from "sequelize";
 import {
   AuditEvent,
+  Document,
   WorkOrderCostEntry,
   WorkOrderNote,
   WorkOrderVendor,
@@ -50,6 +51,10 @@ export async function cleanupCompanies(companyIds) {
   // referencing it are not implicitly cleaned up by that), everything
   // before Company (RESTRICT).
   await AuditEvent.destroy({ where: { companyId: { [Op.in]: ids } } });
+  // Documents' FKs to Property/Asset/Work Order/Vendor are all RESTRICT, so
+  // every Document a suite created must go before any of those. companyId
+  // is the one direct, always-present column to scope by.
+  await Document.destroy({ where: { companyId: { [Op.in]: ids } } });
   if (workOrderIds.length) {
     await WorkOrderCostEntry.destroy({ where: { workOrderId: { [Op.in]: workOrderIds } } });
     await WorkOrderNote.destroy({ where: { workOrderId: { [Op.in]: workOrderIds } } });
