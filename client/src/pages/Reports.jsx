@@ -5,12 +5,12 @@ import EmptyState from "../components/EmptyState";
 import SectionSpinner from "../components/SectionSpinner";
 import MaintenanceSpendReport from "../components/MaintenanceSpendReport";
 import DateRangeControl from "../components/DateRangeControl";
-import { statusBadge, statusLabel } from "../components/WorkOrderTable";
+import { statusBadge } from "../components/WorkOrderTable";
 import { IconAlertTriangle, IconWrench, IconChevronDown } from "../components/icons";
 import { getWorkTypes } from "../utils/api";
 import { useOperationalReport } from "../utils/operationalReport";
 import { usePropertyScope } from "../context/PropertyScopeContext";
-import { useDateRangeFilter, formatRangeLabel } from "../utils/useDateRangeFilter";
+import { useDateRangeFilter } from "../utils/useDateRangeFilter";
 import { WORK_ORDER_CATEGORIES } from "../utils/workOrders";
 
 const REPORTS_TABS = [
@@ -67,7 +67,7 @@ function SortHeader({ label, sortKey, sortBy, sortDir, onSort, className = "" })
 // Reports' primary experience: immediate, filterable rows — "Show me all
 // Water / Line Repair Work Orders this year" in one filtering action, no
 // drill-click required. This is the same /api/reports/work-orders dataset
-// Property Site Map's History mode renders spatially — table here, map
+// Property Site Map's Analyze mode renders spatially — table here, map
 // there, never two independent computations of the same numbers.
 function WorkOrdersReport({ restored }) {
   const { propertyId: scopePropertyId, property: scopeProperty } = usePropertyScope();
@@ -133,7 +133,16 @@ function WorkOrdersReport({ restored }) {
   const workOrdersState = { ...dateRange.toState(), category, workTypeId, status, sortBy, sortDir };
   const backTabState = { tab: "work-orders", workOrdersState };
 
-  const historyHandoffState = { ...dateRange.toState(), category, workTypeId, status, selectedHotspotKey: null };
+  const analyzeHandoffState = { ...dateRange.toState(), category, workTypeId, status, selectedHotspotKey: null };
+
+  const hasActiveFilters = category || workTypeId || status || dateRange.rangeKey !== "last_12_months";
+
+  function clearFilters() {
+    dateRange.setRangeKey("last_12_months");
+    setCategory("");
+    setWorkTypeId("");
+    setStatus("");
+  }
 
   return (
     <div>
@@ -146,6 +155,8 @@ function WorkOrdersReport({ restored }) {
             setCustomStart={dateRange.setCustomStart}
             customEnd={dateRange.customEnd}
             setCustomEnd={dateRange.setCustomEnd}
+            startDate={dateRange.startDate}
+            endDate={dateRange.endDate}
             error={dateRange.error}
           />
 
@@ -156,7 +167,7 @@ function WorkOrdersReport({ restored }) {
               setWorkTypeId("");
             }}
             aria-label="Category"
-            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink"
+            className="h-8 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink"
           >
             <option value="">All Categories</option>
             {WORK_ORDER_CATEGORIES.map((c) => (
@@ -170,7 +181,7 @@ function WorkOrdersReport({ restored }) {
             value={workTypeId}
             onChange={(e) => setWorkTypeId(e.target.value)}
             aria-label="Work Type"
-            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink"
+            className="h-8 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink"
           >
             <option value="">All Work Types</option>
             {visibleWorkTypes.map((wt) => (
@@ -184,7 +195,7 @@ function WorkOrdersReport({ restored }) {
             value={status}
             onChange={(e) => setStatus(e.target.value)}
             aria-label="Status"
-            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink"
+            className="h-8 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink"
           >
             <option value="">All Statuses</option>
             {STATUS_OPTIONS.map((s) => (
@@ -193,12 +204,18 @@ function WorkOrdersReport({ restored }) {
               </option>
             ))}
           </select>
+
+          {hasActiveFilters && (
+            <button type="button" onClick={clearFilters} className="text-sm font-medium text-ink-muted transition hover:text-ink-secondary">
+              Reset
+            </button>
+          )}
         </div>
 
         {scopePropertyId ? (
           <Link
             to={`/portfolio/${scopePropertyId}`}
-            state={{ tab: "map", mapMode: "history", historyFilters: historyHandoffState }}
+            state={{ tab: "map", mapMode: "analyze", analyzeFilters: analyzeHandoffState }}
             className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-secondary transition hover:bg-surface-subtle hover:text-ink"
           >
             View on Site Map →
@@ -215,7 +232,6 @@ function WorkOrdersReport({ restored }) {
 
       <p className="mb-4 text-xs text-ink-muted">
         Property: <span className="font-medium text-ink-secondary">{scopeProperty?.name ?? "All Properties"}</span> — change via the scope selector at the top of the sidebar.
-        {dataStatus === "ready" || dataStatus === "refreshing" ? <> · {formatRangeLabel(dateRange.startDate, dateRange.endDate)}</> : null}
       </p>
 
       {!dateRange.isValid && dateRange.rangeKey === "custom" && (

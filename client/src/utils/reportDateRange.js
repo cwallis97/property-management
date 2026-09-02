@@ -1,9 +1,10 @@
-// Shared by every report that offers the same preset date-range picker
-// (Maintenance Spend, Spatial Reporting) — resolving a preset into concrete
-// { startDate, endDate } is pure UI convenience, not a business rule, so it
-// stays entirely client-side and the backend only ever sees explicit dates.
-// Extracted here specifically so Spatial Reporting doesn't duplicate this
-// logic a second time; it is not a general-purpose date library.
+// Resolving a preset range into a concrete { startDate, endDate } is pure
+// UI convenience, not a business rule, so it stays entirely client-side and
+// the backend only ever sees explicit dates. Used directly by the
+// Maintenance Spend report, and by useDateRangeFilter (the shared control
+// behind Reports' Work Orders tab and Site Map's Analyze mode) to seed its
+// Custom range from whichever preset was active. Not a general-purpose date
+// library.
 export const RANGE_OPTIONS = [
   { value: "last_30_days", label: "Last 30 Days" },
   { value: "last_90_days", label: "Last 90 Days" },

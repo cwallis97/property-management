@@ -6,6 +6,12 @@
 // itself and the handful of invariants that matter most.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { CAPABILITIES, roleHasCapability, ROLE_CAPABILITIES } from "../authorization/capabilities.js";
+// The frontend's deliberately-verbatim mirror of the capability map
+// (client/src/utils/capabilities.js — see its own header comment). Imported
+// here so the "Reports nav is hidden for Technician" guarantee is a real,
+// runnable assertion against the exact function the Sidebar's nav filter
+// calls, without standing up a separate browser/React test toolchain.
+import { roleHasCapability as clientRoleHasCapability, CAPABILITIES as CLIENT_CAPABILITIES } from "../../client/src/utils/capabilities.js";
 import * as membershipController from "../controllers/membershipController.js";
 import * as auditEventController from "../controllers/auditEventController.js";
 import { reqFor, makeRes } from "./helpers/mockReqRes.js";
@@ -53,6 +59,24 @@ describe("Roles & Permissions", () => {
       for (const capability of Object.values(CAPABILITIES)) {
         expect(roleHasCapability("technician", capability)).toBe(false);
       }
+    });
+
+    it("REPORTS_READ is granted to Owner/Admin/Manager and denied to Technician", () => {
+      for (const role of ["owner", "admin", "manager"]) {
+        expect(roleHasCapability(role, CAPABILITIES.REPORTS_READ)).toBe(true);
+      }
+      expect(roleHasCapability("technician", CAPABILITIES.REPORTS_READ)).toBe(false);
+    });
+
+    it("the frontend capability mirror agrees exactly on REPORTS_READ — this is what hides the Sidebar 'Reports' nav item for Technician (server authorization stays authoritative regardless)", () => {
+      expect(CLIENT_CAPABILITIES.REPORTS_READ).toBe(CAPABILITIES.REPORTS_READ);
+      for (const role of ["owner", "admin", "manager"]) {
+        expect(clientRoleHasCapability(role, CLIENT_CAPABILITIES.REPORTS_READ)).toBe(true);
+      }
+      // Sidebar.jsx renders the Reports item only when
+      // `hasCapability(CAPABILITIES.REPORTS_READ)` — i.e. exactly this must
+      // be false for a Technician for the link to be hidden.
+      expect(clientRoleHasCapability("technician", CLIENT_CAPABILITIES.REPORTS_READ)).toBe(false);
     });
 
     it("Audit Log read remains its own dedicated capability, not reused from users.manage or settings.access", () => {

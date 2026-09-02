@@ -22,7 +22,7 @@ const MARKER_TONE_CLASS = {
   default: "bg-blue-600 ring-blue-700",
   completed: "bg-gray-400 ring-gray-500",
   pending: "bg-gray-900 ring-gray-900 animate-pulse",
-  // Distinguishes a grouped hotspot marker (Spatial Reporting) from an
+  // Distinguishes a grouped hotspot marker (Site Map Analyze) from an
   // individual Work Order pin — a distinct hue, not just a size change, so
   // it reads correctly even for a viewer who can't distinguish size alone.
   hotspot: "bg-violet-600 ring-violet-700",
@@ -30,8 +30,13 @@ const MARKER_TONE_CLASS = {
   defaultSelected: "bg-blue-800 ring-blue-900",
 };
 
+// Selected-marker treatment — a heavy contrasting halo ring, layered on
+// TOP of the tone shift so selection never depends on color alone (see
+// Site Map Analyze's selectedHotspotKey). Applied via marker.selected.
+const MARKER_SELECTED_CLASS = "z-10 ring-4 ring-accent ring-offset-2 ring-offset-surface";
+
 // Optional per-marker size tier — additive to the existing fixed-size
-// dot (still the default). Spatial Reporting uses this so a
+// dot (still the default). Site Map Analyze uses this so a
 // higher-repair-count hotspot reads as visually more prominent, never
 // relying on color/tone alone to communicate that (see marker.badge below
 // for the actual accessible count).
@@ -208,7 +213,7 @@ export default function SitePlanCanvas({
                 style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
                 className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow ring-1 transition hover:z-10 hover:scale-110 focus-visible:z-10 focus-visible:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
                   MARKER_SIZE_CLASS[marker.size] || MARKER_SIZE_CLASS.sm
-                } ${MARKER_TONE_CLASS[marker.tone] || MARKER_TONE_CLASS.default}`}
+                } ${MARKER_TONE_CLASS[marker.tone] || MARKER_TONE_CLASS.default} ${marker.selected ? MARKER_SELECTED_CLASS : ""}`}
                 aria-label={marker.badge ? `${marker.label || "Location"}: ${marker.badge} matching Work Orders` : marker.label || "Marker"}
               >
                 {/* Numeric count badge — the accessible, always-visible signal

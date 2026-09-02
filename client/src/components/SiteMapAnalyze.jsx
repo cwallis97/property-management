@@ -10,8 +10,8 @@ import { getSitePlan, getWorkTypes } from "../utils/api";
 import { useSitePlanFile } from "../utils/useSitePlanFile";
 import { useOperationalReport } from "../utils/operationalReport";
 import { buildHotspotMarkers, hotspotKey } from "../utils/hotspotMarkers";
-import { useDateRangeFilter, formatRangeLabel } from "../utils/useDateRangeFilter";
-import { WORK_ORDER_CATEGORIES, categoryLabel as categoryLabelMap } from "../utils/workOrders";
+import { useDateRangeFilter } from "../utils/useDateRangeFilter";
+import { WORK_ORDER_CATEGORIES } from "../utils/workOrders";
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
@@ -20,7 +20,6 @@ const STATUS_OPTIONS = [
   { value: "waiting", label: "Waiting" },
   { value: "completed", label: "Completed" },
 ];
-const STATUS_LABEL_BY_VALUE = Object.fromEntries(STATUS_OPTIONS.map((s) => [s.value, s.label]));
 
 function formatMoney(amount) {
   return `$${Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -30,13 +29,15 @@ function formatShortDate(value) {
   return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-// The Property Site Map's "History" mode — the same authoritative
+// The Property Site Map's "Analyze" mode — the same authoritative
 // /api/reports/work-orders dataset Reports' Work Orders tab renders as a
 // table, here rendered spatially against this Property's real, uploaded
-// Site Plan via the unmodified SitePlanCanvas primitive. Every surface
-// below (summary strip, Top Repeat Locations, map markers, hotspot detail,
-// matching Work Orders list) reads directly from the one `data` object —
-// nothing here re-filters, re-sums, or re-derives independently.
+// Site Plan via the unmodified SitePlanCanvas primitive. This is active
+// filtering / spend / repeat-repair analysis, not merely viewing
+// historical records. Every surface below (summary strip, Top Repeat
+// Locations, map markers, hotspot detail, matching Work Orders list) reads
+// directly from the one `data` object — nothing here re-filters, re-sums,
+// or re-derives independently.
 //
 // Layout follows one deliberate hierarchy: filters/summary stay compact so
 // the real Site Plan can dominate the workspace; the side panel shows
@@ -45,7 +46,7 @@ function formatShortDate(value) {
 // jank this pass exists to remove); the Work Order list is a collapsed-by-
 // default detail section, not a second table fighting the map for
 // attention.
-export default function SiteMapHistory({ propertyId, restored, onBackState }) {
+export default function SiteMapAnalyze({ propertyId, restored, onBackState }) {
   const dateRange = useDateRangeFilter(restored);
   const [category, setCategory] = useState(restored?.category ?? "");
   const [workTypeId, setWorkTypeId] = useState(restored?.workTypeId ?? "");
@@ -69,7 +70,6 @@ export default function SiteMapHistory({ propertyId, restored, onBackState }) {
   }, []);
 
   const visibleWorkTypes = useMemo(() => (category ? workTypes.filter((wt) => wt.category === category) : workTypes), [workTypes, category]);
-  const workTypeLabelById = useMemo(() => Object.fromEntries(workTypes.map((wt) => [wt.id, wt.label])), [workTypes]);
 
   function handleCategoryChange(next) {
     setCategory(next);
@@ -169,28 +169,19 @@ export default function SiteMapHistory({ propertyId, restored, onBackState }) {
     return selectedHotspotWorkOrders.reduce((latest, wo) => (wo.createdAt > latest ? wo.createdAt : latest), selectedHotspotWorkOrders[0].createdAt);
   }, [selectedHotspotWorkOrders]);
 
-  const historyFilters = { ...dateRange.toState(), category, workTypeId, status, selectedHotspotKey };
+  const analyzeFilters = { ...dateRange.toState(), category, workTypeId, status, selectedHotspotKey };
   const backState = onBackState
-    ? onBackState(historyFilters)
-    : { backLabel: "Site Map", backTo: `/portfolio/${propertyId}`, backTabState: { tab: "map", mapMode: "history", historyFilters } };
-
-  // One subtle line of text answering "what am I looking at" — never a
-  // restatement of every control's own label, just the parts that
-  // actually narrow the result plus the real resolved date range.
-  const activeFilterSummary = useMemo(() => {
-    if (!data) return null;
-    const parts = [`${data.summary.workOrderCount} repair${data.summary.workOrderCount === 1 ? "" : "s"}`];
-    if (category) parts.push(categoryLabelMap[category] ?? category);
-    if (workTypeId) parts.push(workTypeLabelById[workTypeId] ?? "Work Type");
-    if (status) parts.push(STATUS_LABEL_BY_VALUE[status] ?? status);
-    parts.push(formatRangeLabel(dateRange.startDate, dateRange.endDate));
-    return parts.join(" · ");
-  }, [data, category, workTypeId, status, workTypeLabelById, dateRange.startDate, dateRange.endDate]);
+    ? onBackState(analyzeFilters)
+    : { backLabel: "Site Map", backTo: `/portfolio/${propertyId}`, backTabState: { tab: "map", mapMode: "analyze", analyzeFilters } };
 
   return (
     <div>
-      {/* FILTERS — compact, horizontal, one row on desktop. */}
-      <div className="mb-2 flex flex-wrap items-center gap-2">
+      {/* FILTERS — one compact row: [ Date Range ▾ ] [ Category ▾ ]
+          [ Work Type ▾ ] [ Status ▾ ] Reset. Every control is h-8 so they
+          align; advanced date choices live inside the Date Range popover
+          rather than a permanent button row. No separate "what am I
+          looking at" text line — the controls already say it. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <DateRangeControl
           rangeKey={dateRange.rangeKey}
           setRangeKey={dateRange.setRangeKey}
@@ -198,6 +189,8 @@ export default function SiteMapHistory({ propertyId, restored, onBackState }) {
           setCustomStart={dateRange.setCustomStart}
           customEnd={dateRange.customEnd}
           setCustomEnd={dateRange.setCustomEnd}
+          startDate={dateRange.startDate}
+          endDate={dateRange.endDate}
           error={dateRange.error}
         />
 
@@ -205,7 +198,7 @@ export default function SiteMapHistory({ propertyId, restored, onBackState }) {
           value={category}
           onChange={(e) => handleCategoryChange(e.target.value)}
           aria-label="Category"
-          className="rounded-lg border border-line bg-surface px-2.5 py-[7px] text-sm text-ink"
+          className="h-8 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink"
         >
           <option value="">All Categories</option>
           {WORK_ORDER_CATEGORIES.map((c) => (
@@ -219,7 +212,7 @@ export default function SiteMapHistory({ propertyId, restored, onBackState }) {
           value={workTypeId}
           onChange={(e) => setWorkTypeId(e.target.value)}
           aria-label="Work Type"
-          className="rounded-lg border border-line bg-surface px-2.5 py-[7px] text-sm text-ink"
+          className="h-8 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink"
         >
           <option value="">All Work Types</option>
           {visibleWorkTypes.map((wt) => (
@@ -233,7 +226,7 @@ export default function SiteMapHistory({ propertyId, restored, onBackState }) {
           value={status}
           onChange={(e) => setStatus(e.target.value)}
           aria-label="Status"
-          className="rounded-lg border border-line bg-surface px-2.5 py-[7px] text-sm text-ink"
+          className="h-8 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink"
         >
           <option value="">All Statuses</option>
           {STATUS_OPTIONS.map((s) => (
@@ -245,12 +238,10 @@ export default function SiteMapHistory({ propertyId, restored, onBackState }) {
 
         {hasActiveFilters && (
           <button type="button" onClick={clearFilters} className="text-sm font-medium text-ink-muted transition hover:text-ink-secondary">
-            Clear filters
+            Reset
           </button>
         )}
       </div>
-
-      {activeFilterSummary && <p className="mb-4 text-xs text-ink-secondary">{activeFilterSummary}</p>}
 
       {dataStatus === "loading" && <SectionSpinner />}
 
@@ -270,18 +261,22 @@ export default function SiteMapHistory({ propertyId, restored, onBackState }) {
 
       {(dataStatus === "ready" || dataStatus === "refreshing") && data && (
         <div className="space-y-4">
-          {/* Compact inline summary — deliberately plain text, not a grid of
-              bordered cards, so it never outweighs the Site Plan below it. */}
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+          {/* One compact metrics strip — deliberately plain text with hairline
+              middot dividers, never a grid of bordered cards, so it never
+              outweighs the Site Plan below it. */}
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm">
             <span>
               <strong className="font-semibold text-ink">{data.summary.workOrderCount}</strong> <span className="text-ink-secondary">Repairs</span>
             </span>
+            <span className="text-ink-muted" aria-hidden="true">·</span>
             <span>
               <strong className="font-semibold text-ink">{formatMoney(data.summary.totalSpend)}</strong> <span className="text-ink-secondary">Spend</span>
             </span>
+            <span className="text-ink-muted" aria-hidden="true">·</span>
             <span>
               <strong className="font-semibold text-ink">{data.summary.mappedCount}</strong> <span className="text-ink-secondary">Mapped</span>
             </span>
+            <span className="text-ink-muted" aria-hidden="true">·</span>
             <span>
               <strong className="font-semibold text-ink">{data.summary.unmappedCount}</strong> <span className="text-ink-secondary">Unmapped</span>
             </span>
@@ -390,7 +385,10 @@ export default function SiteMapHistory({ propertyId, restored, onBackState }) {
                     {selectedHotspotWorkOrders.map((wo) => (
                       <li key={wo.id}>
                         <Link to={`/portfolio/${propertyId}/work-orders/${wo.id}`} state={backState} className="flex items-center justify-between gap-2 py-2 text-sm transition hover:text-accent">
-                          <span className="min-w-0 truncate text-ink">{wo.title}</span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-ink">{wo.title}</span>
+                            <span className="text-xs text-ink-muted">{formatShortDate(wo.createdAt)}</span>
+                          </span>
                           <span className="flex shrink-0 items-center gap-2">
                             <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${statusBadge[wo.status] || "bg-surface-subtle text-ink-secondary"}`}>
                               {statusLabel[wo.status] || wo.status}

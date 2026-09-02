@@ -6,7 +6,7 @@ import SectionSpinner from "../components/SectionSpinner";
 import Breadcrumb from "../components/Breadcrumb";
 import LocationList from "../components/LocationList";
 import SitePlanMap from "../components/SitePlanMap";
-import SiteMapHistory from "../components/SiteMapHistory";
+import SiteMapAnalyze from "../components/SiteMapAnalyze";
 import AssetTable from "../components/AssetTable";
 import WorkOrderTable, { priorityBadge, statusBadge, statusLabel } from "../components/WorkOrderTable";
 import WorkOrderViewFilter from "../components/WorkOrderViewFilter";
@@ -72,20 +72,20 @@ export default function PropertyDetail() {
   // land on (see WorkOrderDetail's back link), so the user doesn't lose
   // their place after finishing an action.
   const [activeTab, setActiveTab] = useState(location.state?.tab ?? "overview");
-  // The Map tab's own Active/History mode — Active is the unchanged,
-  // everyday operational map; History is the filterable spend/repair
-  // analytics view (see SiteMapHistory), gated server-side on
+  // The Map tab's own Active/Analyze mode — Active is the unchanged,
+  // everyday operational map; Analyze is active filtering / spend /
+  // repeat-repair analysis (see SiteMapAnalyze), gated server-side on
   // REPORTS_READ. Restored from router state so "View on Site Map" from
-  // Reports (or a Work Order's "Back") lands directly in History mode with
+  // Reports (or a Work Order's "Back") lands directly in Analyze mode with
   // its filters intact, the same return-to-origin pattern as activeTab.
   const [mapMode, setMapMode] = useState(location.state?.mapMode ?? "active");
-  const canViewMapHistory = hasCapability(CAPABILITIES.REPORTS_READ);
+  const canViewMapAnalyze = hasCapability(CAPABILITIES.REPORTS_READ);
   // Defensive only — the real boundary is the server (REPORTS_READ on the
   // report endpoint itself); this just avoids ever showing a Technician a
-  // stale/crafted "history" mode with no way to actually load data.
+  // stale/crafted "analyze" mode with no way to actually load data.
   useEffect(() => {
-    if (mapMode === "history" && !canViewMapHistory) setMapMode("active");
-  }, [mapMode, canViewMapHistory]);
+    if (mapMode === "analyze" && !canViewMapAnalyze) setMapMode("active");
+  }, [mapMode, canViewMapAnalyze]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateAssetModal, setShowCreateAssetModal] = useState(false);
   const [showCreateLocationModal, setShowCreateLocationModal] = useState(false);
@@ -636,15 +636,15 @@ export default function PropertyDetail() {
                 for them (UX only; the real boundary is server-side on the
                 report endpoint), so there's no dead-end click into a mode
                 that can never load data. */}
-            {canViewMapHistory && (
+            {canViewMapAnalyze && (
               <button
                 type="button"
-                onClick={() => setMapMode("history")}
+                onClick={() => setMapMode("analyze")}
                 className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                  mapMode === "history" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
+                  mapMode === "analyze" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary hover:text-ink-secondary"
                 }`}
               >
-                History
+                Analyze
               </button>
             )}
           </div>
@@ -658,7 +658,7 @@ export default function PropertyDetail() {
               onWorkOrderCreated={(created) => setWorkOrders((prev) => [...prev, created])}
             />
           ) : (
-            <SiteMapHistory propertyId={propertyId} restored={location.state?.historyFilters ?? null} />
+            <SiteMapAnalyze propertyId={propertyId} restored={location.state?.analyzeFilters ?? null} />
           )}
         </div>
       )}

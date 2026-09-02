@@ -151,6 +151,16 @@ function buildWhereClause(filters, accessiblePropertyIds) {
   if (filters.propertyId) {
     conditions.push("wo.property_id = :propertyId");
     replacements.propertyId = filters.propertyId;
+  } else {
+    // Company-wide ("All Properties") reporting represents the ACTIVE
+    // operating portfolio — the same thing the Property Scope selector and
+    // GET /api/properties already mean by "All Properties" (active-only by
+    // default) — so an archived Property must never silently inflate a
+    // portfolio total. Only applied when no specific propertyId was asked
+    // for: a direct single-Property request for an accessible-but-archived
+    // Property still follows the normal resource/access convention
+    // (resolveAccessScope already gates it) and is answered in full.
+    conditions.push("p.status = 'active'");
   }
   if (filters.category === "uncategorized") {
     conditions.push("wo.category IS NULL");
@@ -324,7 +334,7 @@ export async function getMaintenanceSpendWorkOrders(req, res) {
 
 // ---------------------------------------------------------------------
 // Work Orders Report — the ONE shared dataset behind both Reports'
-// spreadsheet-first "Work Orders" tab and Property Site Map's "History"
+// spreadsheet-first "Work Orders" tab and Property Site Map's "Analyze"
 // mode. Same filters, same query, same authorization, same numbers —
 // Reports renders these rows as a table; Site Map renders the same rows
 // spatially (plus the hotspot grouping below). Neither surface computes
@@ -355,10 +365,10 @@ export async function getMaintenanceSpendWorkOrders(req, res) {
 // (COALESCE) rather than being silently dropped the way an INNER JOIN
 // would drop it.
 //
-// propertyId is OPTIONAL, unlike the earlier Spatial-Reporting-only design
-// — Reports' Work Orders tab needs a Company-wide "All Properties" view
-// (matching Maintenance Spend's existing convention), while Site Map's
-// History mode always passes its own Property's id. When present, it's
+// propertyId is OPTIONAL — Reports' Work Orders tab needs a Company-wide
+// "All Properties" view (matching Maintenance Spend's existing
+// convention), while Site Map's Analyze mode always passes its own
+// Property's id. When present, it's
 // still validated against the caller's own Companies exactly as before
 // (404, never a distinguishable error) — that check only applies when a
 // specific Property was actually requested.
@@ -395,6 +405,14 @@ function buildWorkOrdersReportWhereClause(filters, accessiblePropertyIds) {
   if (filters.propertyId) {
     conditions.push("wo.property_id = :propertyId");
     replacements.propertyId = filters.propertyId;
+  } else {
+    // Same rule as Maintenance Spend's buildWhereClause: Company-wide
+    // ("All Properties") reporting is the ACTIVE operating portfolio, so an
+    // archived Property never inflates workOrderCount / totalSpend /
+    // locationsRepresented / hotspots. A direct single-Property request for
+    // an accessible archived Property is unaffected (handled above, and
+    // already gated by the explicit Property lookup + resolveAccessScope).
+    conditions.push("p.status = 'active'");
   }
   if (filters.startDate) {
     conditions.push("wo.created_at >= :startDate");
@@ -481,7 +499,7 @@ export async function getWorkOrdersReport(req, res) {
   // zero-Cost-Entry Work Order in the result set with spend 0 rather than
   // disappearing — the LEFT JOIN never excludes it. p.name is only used
   // for Reports' "All Properties" table (a Property column); Site Map's
-  // History mode already knows its own Property and simply ignores it.
+  // Analyze mode already knows its own Property and simply ignores it.
   const rows = await sequelize.query(
     `
     SELECT
@@ -562,8 +580,9 @@ export async function getWorkOrdersReport(req, res) {
     // never "most recent" (would make the marker visibly jump every time a
     // new repair is logged) and never an average (could place the marker
     // somewhere physically meaningless if the underlying coordinates were
-    // ever imprecise) — see docs/Product-Bible.md's Spatial Reporting
-    // entry for the full rationale. A group with zero mapped members still
+    // ever imprecise) — see docs/Product-Bible.md's Reports & Site Map
+    // Analytics V1 entry for the full rationale. A group with zero mapped
+    // members still
     // becomes a real hotspot row with mapX/mapY left null: analytically
     // real, just not spatially placed (never dropped).
     //

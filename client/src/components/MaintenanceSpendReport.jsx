@@ -28,11 +28,11 @@ function StatTile({ label, value }) {
 // The financial breakdown Category -> Work Type -> Work Orders drill —
 // preserved exactly as it was, now a secondary Reports tab rather than the
 // entire Reports experience. Filters on Cost Entry date (ce.cost_date),
-// deliberately distinct from the Work Orders tab / Site Map History's
+// deliberately distinct from the Work Orders tab / Site Map Analyze's
 // Work-Order-date basis (see reportController.js#getWorkOrdersReport's own
 // comment) — for that reason this report does not offer a "View on Site
 // Map" handoff of its own; that lives on the Work Orders tab, whose
-// filters are guaranteed to match History mode's exactly.
+// filters are guaranteed to match Analyze mode's exactly.
 //
 // Property filtering is the global Property Scope selector (Sidebar), not
 // a second control here. Entering Reports while Riverbend is selected

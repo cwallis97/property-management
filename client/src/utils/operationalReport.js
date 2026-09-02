@@ -2,12 +2,12 @@ import { useEffect, useState, useCallback } from "react";
 import { getWorkOrdersReport } from "./api";
 
 // The ONE fetch implementation behind both Reports' Work Orders tab and
-// Property Site Map's History mode — same endpoint, same race-condition
+// Property Site Map's Analyze mode — same endpoint, same race-condition
 // guard, used by both, so neither surface can quietly diverge in how it
 // talks to the one shared /api/reports/work-orders dataset.
 //
 // `enabled` lets a caller defer fetching until its own prerequisites are
-// ready (e.g. History mode only fetches once its Property id is known)
+// ready (e.g. Analyze mode only fetches once its Property id is known)
 // without needing a second hook shape.
 //
 // status: "idle" (disabled) | "loading" (first fetch) | "refreshing"

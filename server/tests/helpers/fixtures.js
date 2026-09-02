@@ -32,8 +32,11 @@ export async function createMembership({ user, company, role = "owner", accessMo
   return membership;
 }
 
-export async function createProperty({ company, name = "QA Property" }) {
-  return Property.create({ companyId: company.id, name: `${name} ${randomUUID().slice(0, 8)}` });
+export async function createProperty({ company, name = "QA Property", ...overrides }) {
+  // `...overrides` mirrors every other helper here (createWorkOrder,
+  // createLocation, …) — its first real use is `status: "archived"` for
+  // the archived-Property reporting-exclusion coverage.
+  return Property.create({ companyId: company.id, name: `${name} ${randomUUID().slice(0, 8)}`, ...overrides });
 }
 
 export async function createWorkOrder({ property, title = "QA Work Order", ...overrides }) {

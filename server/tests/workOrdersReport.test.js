@@ -1,7 +1,7 @@
 // Work Orders Report — permanent regression coverage for
 // server/controllers/reportController.js#getWorkOrdersReport, the ONE
 // shared dataset behind both Reports' spreadsheet-first "Work Orders" tab
-// and Property Site Map's "History" mode. See docs/Product-Bible.md's
+// and Property Site Map's "Analyze" mode. See docs/Product-Bible.md's
 // entry for the full product rules this suite proves: Work-Order-first
 // aggregation (never cost-entry-first — a $0 Work Order must still
 // count), Location-based (never coordinate-clustering) hotspot grouping
@@ -11,7 +11,7 @@
 // place — that Reports and Site Map can never silently compute different
 // numbers for identical filters.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { WorkType, WorkOrder, Location, Membership, User, PropertyAccess } from "../models/index.js";
+import { WorkType, WorkOrder, WorkOrderCostEntry, Property, Location, Membership, User, PropertyAccess } from "../models/index.js";
 import * as reportController from "../controllers/reportController.js";
 import { reqFor, makeRes } from "./helpers/mockReqRes.js";
 import { createCompany, createUser, createMembership, createProperty, createLocation, createAsset, createWorkOrder, createCostEntry, createWorkType } from "./helpers/fixtures.js";
@@ -49,6 +49,12 @@ describe("Work Orders Report", () => {
   let woForeign;
   // propertyB fixtures — used only by the Company-wide describe block below.
   let woOnPropertyB;
+  // An ARCHIVED Property in the same Company — its in-range, in-category
+  // Work Order and $500 spend must never appear in a Company-wide ("All
+  // Properties") report (that view is the active operating portfolio), but
+  // the row itself still exists and a direct single-Property request for
+  // it is still answered in full.
+  let propertyArchived, locationArchived, woArchived, costArchived;
 
   beforeAll(async () => {
     companyA = await createCompany("QA Reports Company A");
@@ -216,6 +222,24 @@ describe("Work Orders Report", () => {
       createdAt: new Date(inRangeDate.getTime() + 7000),
     });
     await createCostEntry({ workOrder: woOnPropertyB, amount: 75, costDate: "2026-01-15" });
+
+    // Archived Property in Company A — same shape as any active Property's
+    // data (in range, category "water", real spend), so the ONLY reason it
+    // drops out of a Company-wide report is its archived status.
+    propertyArchived = await createProperty({ company: companyA, name: "QA Archived Property", status: "archived" });
+    locationArchived = await createLocation({ property: propertyArchived, name: "Archived Lot 9" });
+    woArchived = await createWorkOrder({
+      property: propertyArchived,
+      title: "Archived Property Repair",
+      category: "water",
+      workTypeId: workType.id,
+      status: "open",
+      locationId: locationArchived.id,
+      mapX: 40,
+      mapY: 40,
+      createdAt: new Date(inRangeDate.getTime() + 8000),
+    });
+    costArchived = await createCostEntry({ workOrder: woArchived, amount: 500, costDate: "2026-01-15" });
 
     // Foreign company's own Work Order — must never appear in any Company A
     // result, under any filter.
@@ -489,14 +513,72 @@ describe("Work Orders Report", () => {
     });
   });
 
+  describe("archived Properties — excluded from Company-wide reporting by default", () => {
+    it("Company-wide Work Orders report omits an archived Property's Work Orders and spend, while still including every active Property", async () => {
+      const res = makeRes();
+      const req = reqOwner();
+      req.query = { ...IN_RANGE_QUERY, propertyId: undefined };
+      await reportController.getWorkOrdersReport(req, res);
+
+      expect(res.statusCode === 200 || res.statusCode === undefined).toBe(true);
+      const ids = res.body.workOrders.map((wo) => wo.id);
+      // Active Properties: unchanged.
+      expect(ids).toContain(woUnit12A.id);
+      expect(ids).toContain(woOnPropertyB.id);
+      // Archived Property: fully absent, not merely zero-valued.
+      expect(ids).not.toContain(woArchived.id);
+      expect(res.body.workOrders.some((wo) => wo.propertyName === propertyArchived.name)).toBe(false);
+      expect(res.body.hotspots.some((h) => h.locationId === locationArchived.id)).toBe(false);
+      // The active-portfolio total is exactly what it was before the
+      // archived Property existed — 470 (propertyA) + 75 (propertyB) — never
+      // + 500.
+      expect(res.body.summary.totalSpend).toBe(470 + 75);
+    });
+
+    it("Company-wide Maintenance Spend applies the same active-Property default", async () => {
+      const res = makeRes();
+      const req = reqOwner();
+      req.query = { ...IN_RANGE_QUERY, propertyId: undefined };
+      await reportController.getMaintenanceSpendSummary(req, res);
+
+      expect(res.statusCode === 200 || res.statusCode === undefined).toBe(true);
+      expect(res.body.summary.totalSpend).toBe(470 + 75);
+    });
+
+    it("the archived Property's Work Order and Cost Entry rows still exist — this is a reporting default, never a delete", async () => {
+      expect(await WorkOrder.findByPk(woArchived.id)).not.toBeNull();
+      expect(await WorkOrderCostEntry.findByPk(costArchived.id)).not.toBeNull();
+      const stillThere = await Property.findByPk(propertyArchived.id);
+      expect(stillThere).not.toBeNull();
+      expect(stillThere.status).toBe("archived");
+    });
+
+    it("a direct single-Property request for the accessible archived Property is still answered in full (existing access/resource convention)", async () => {
+      const woRes = makeRes();
+      const woReq = reqOwner();
+      woReq.query = { ...IN_RANGE_QUERY, propertyId: propertyArchived.id };
+      await reportController.getWorkOrdersReport(woReq, woRes);
+      expect(woRes.statusCode === 200 || woRes.statusCode === undefined).toBe(true);
+      expect(woRes.body.workOrders.map((wo) => wo.id)).toContain(woArchived.id);
+      expect(woRes.body.summary.totalSpend).toBe(500);
+
+      const msRes = makeRes();
+      const msReq = reqOwner();
+      msReq.query = { ...IN_RANGE_QUERY, propertyId: propertyArchived.id };
+      await reportController.getMaintenanceSpendSummary(msReq, msRes);
+      expect(msRes.statusCode === 200 || msRes.statusCode === undefined).toBe(true);
+      expect(msRes.body.summary.totalSpend).toBe(500);
+    });
+  });
+
   // The actual architectural guarantee this milestone's redesign depends
-  // on: Reports' Work Orders tab and Property Site Map's History mode call
+  // on: Reports' Work Orders tab and Property Site Map's Analyze mode call
   // this exact same controller function with the same filter shape. This
   // is deliberately not a "different code path" test — there IS only one
   // code path — but a permanent tripwire: if a future change ever forks
   // Reports and Site Map onto separate queries, this is what would catch
   // it the moment their results stop matching bit-for-bit.
-  describe("Reports / Site Map History consistency", () => {
+  describe("Reports / Site Map Analyze consistency", () => {
     it("identical single-Property filters produce identical Work Order ID sets and identical total spend, regardless of which surface's request shape is used", async () => {
       const reportsShapedReq = reqOwner();
       reportsShapedReq.query = { propertyId: propertyA.id, startDate: "2026-01-01", endDate: "2026-12-31", category: "water", workTypeId: undefined, status: undefined };
@@ -527,6 +609,14 @@ describe("Work Orders Report", () => {
 
     it("Technician is denied (403) — portfolio/Property-wide financial analytics is not part of Technician's own Work Order cost visibility", async () => {
       const res = await fetchReport(reqTech());
+      expect(res.statusCode).toBe(403);
+    });
+
+    it("Technician is denied (403) on Maintenance Spend too — server authorization is the boundary, regardless of the hidden nav link", async () => {
+      const res = makeRes();
+      const req = reqTech();
+      req.query = { ...IN_RANGE_QUERY, propertyId: propertyA.id };
+      await reportController.getMaintenanceSpendSummary(req, res);
       expect(res.statusCode).toBe(403);
     });
   });

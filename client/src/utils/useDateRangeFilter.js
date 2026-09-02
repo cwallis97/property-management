@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { resolveDateRange } from "./reportDateRange";
 
-// The one date-range control behind both Site Map's History mode and
+// The one date-range control behind both Site Map's Analyze mode and
 // Reports' Work Orders tab — identical presets, identical Custom
 // start/end semantics, identical validation, so the two surfaces can never
 // interpret "Jan 1 – Aug 31" differently. Custom is first-class, not a

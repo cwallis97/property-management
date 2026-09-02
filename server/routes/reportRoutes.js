@@ -11,7 +11,7 @@ router.use(requireAuth);
 router.get("/maintenance-spend", getMaintenanceSpendSummary);
 router.get("/maintenance-spend/work-orders", getMaintenanceSpendWorkOrders);
 // The one shared dataset behind Reports' Work Orders tab AND Property Site
-// Map's History mode — see getWorkOrdersReport's own comment.
+// Map's Analyze mode — see getWorkOrdersReport's own comment.
 router.get("/work-orders", getWorkOrdersReport);
 
 export default router;

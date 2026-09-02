@@ -32,6 +32,10 @@ export function buildHotspotMarkers({ hotspots, workOrders, selectedHotspotKey, 
       y: hotspot.mapY,
       tone: isGrouped ? (isSelected ? "hotspotSelected" : "hotspot") : isSelected ? "defaultSelected" : "default",
       size: hotspot.workOrderCount >= 5 ? "lg" : hotspot.workOrderCount >= 2 ? "md" : "sm",
+      // Selection is communicated by a distinct ring/halo in SitePlanCanvas
+      // (not tone alone) so it reads for a viewer who can't rely on the
+      // color shift between hotspot / hotspotSelected.
+      selected: isSelected,
       badge: isGrouped ? hotspot.workOrderCount : undefined,
       label: `${hotspot.locationLabel} — ${hotspot.workOrderCount} matching Work Order${hotspot.workOrderCount === 1 ? "" : "s"}`,
       onClick: () => onSelectHotspot(key),
@@ -49,6 +53,7 @@ export function buildHotspotMarkers({ hotspots, workOrders, selectedHotspotKey, 
       y: wo.mapY,
       tone: isSelected ? "defaultSelected" : "default",
       size: "sm",
+      selected: isSelected,
       label: `${wo.title} — Unspecified Location`,
       onClick: () => onSelectHotspot(key),
     });

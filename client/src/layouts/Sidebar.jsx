@@ -23,8 +23,11 @@ const navItems = [
   { to: "/work-orders", label: "Work Orders", icon: IconWrench },
   // Reporting is portfolio-wide, not scoped to one property, so it lives
   // as a top-level pillar alongside Dashboard/Portfolio rather than inside
-  // any single property's own navigation.
-  { to: "/reports", label: "Reports", icon: IconActivity },
+  // any single property's own navigation. Gated on REPORTS_READ (the same
+  // capability the report endpoints enforce server-side) so Technician —
+  // who would only ever hit a 403 here — isn't shown a dead-end link.
+  // UX only: the server remains the authoritative boundary.
+  { to: "/reports", label: "Reports", icon: IconActivity, capability: CAPABILITIES.REPORTS_READ },
   { to: "/vendors", label: "Vendors", icon: IconTruck },
   { to: "/documents", label: "Documents", icon: IconFolder },
 ];
@@ -167,19 +170,21 @@ export default function Sidebar() {
       <PropertyScopeSelector />
 
       <nav className="flex-1 space-y-0.5 px-3 py-2">
-        {navItems.map(({ to, label, icon: Icon }) =>
-          to === "/portfolio" ? (
-            <Link key={label} to={portfolioTo} className={linkClasses({ isActive: portfolioActive })}>
-              <Icon className="h-[18px] w-[18px]" />
-              {label}
-            </Link>
-          ) : (
-            <NavLink key={label} to={to} className={linkClasses}>
-              <Icon className="h-[18px] w-[18px]" />
-              {label}
-            </NavLink>
-          )
-        )}
+        {navItems
+          .filter(({ capability }) => !capability || hasCapability(capability))
+          .map(({ to, label, icon: Icon }) =>
+            to === "/portfolio" ? (
+              <Link key={label} to={portfolioTo} className={linkClasses({ isActive: portfolioActive })}>
+                <Icon className="h-[18px] w-[18px]" />
+                {label}
+              </Link>
+            ) : (
+              <NavLink key={label} to={to} className={linkClasses}>
+                <Icon className="h-[18px] w-[18px]" />
+                {label}
+              </NavLink>
+            )
+          )}
       </nav>
 
       {hasCapability(CAPABILITIES.SETTINGS_ACCESS) && (
