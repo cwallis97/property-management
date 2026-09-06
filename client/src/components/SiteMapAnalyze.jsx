@@ -1,114 +1,77 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import EmptyState from "./EmptyState";
-import SectionSpinner from "./SectionSpinner";
 import SitePlanCanvas from "./SitePlanCanvas";
-import DateRangeControl from "./DateRangeControl";
-import { statusBadge, statusLabel } from "./WorkOrderTable";
+import WorkOrderReportFilters from "./WorkOrderReportFilters";
+import AnalyzeWorkOrderRow from "./AnalyzeWorkOrderRow";
 import { IconAlertTriangle, IconWrench, IconChevronDown, IconArrowLeft } from "./icons";
-import { getSitePlan, getWorkTypes } from "../utils/api";
+import { getSitePlan } from "../utils/api";
 import { useSitePlanFile } from "../utils/useSitePlanFile";
 import { useOperationalReport } from "../utils/operationalReport";
 import { buildHotspotMarkers, hotspotKey } from "../utils/hotspotMarkers";
-import { useDateRangeFilter } from "../utils/useDateRangeFilter";
-import { WORK_ORDER_CATEGORIES } from "../utils/workOrders";
+import { useWorkOrderReportFilters } from "../utils/useWorkOrderReportFilters";
+import { analyzeMoney, analyzeDate } from "../utils/analyzeFormat";
 
-const STATUS_OPTIONS = [
-  { value: "open", label: "Open" },
-  { value: "assigned", label: "Assigned" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "waiting", label: "Waiting" },
-  { value: "completed", label: "Completed" },
-];
+const MAP_HEIGHT = "72vh";
+const LABEL = "text-xs font-semibold uppercase tracking-wide text-ink-muted";
 
-function formatMoney(amount) {
-  return `$${Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// A fixed-geometry stand-in for the Site Plan while it is loading or
+// cannot be shown — same footprint and edge treatment as SitePlanCanvas's
+// own viewport, so the page never jumps between states.
+function MapFootprint({ children }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-3 rounded-xl border border-line bg-surface-subtle px-6 text-center"
+      style={{ height: MAP_HEIGHT }}
+    >
+      {children}
+    </div>
+  );
 }
 
-function formatShortDate(value) {
-  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+function CalmNotice({ icon: Icon, title, children, action }) {
+  return (
+    <>
+      {Icon && (
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface text-ink-muted">
+          <Icon className="h-5 w-5" />
+        </div>
+      )}
+      {title && <p className="text-sm font-medium text-ink">{title}</p>}
+      {children && <p className="max-w-sm text-sm text-ink-secondary">{children}</p>}
+      {action}
+    </>
+  );
 }
 
 // The Property Site Map's "Analyze" mode — the same authoritative
 // /api/reports/work-orders dataset Reports' Work Orders tab renders as a
 // table, here rendered spatially against this Property's real, uploaded
-// Site Plan via the unmodified SitePlanCanvas primitive. This is active
-// filtering / spend / repeat-repair analysis, not merely viewing
-// historical records. Every surface below (summary strip, Top Repeat
-// Locations, map markers, hotspot detail, matching Work Orders list) reads
-// directly from the one `data` object — nothing here re-filters, re-sums,
-// or re-derives independently.
+// Site Plan via the shared SitePlanCanvas primitive. Every surface below
+// (summary line, ranked Locations, map markers, hotspot detail, matching
+// Work Orders) reads directly from the one `data` object — nothing here
+// re-filters, re-sums, or re-derives independently.
 //
-// Layout follows one deliberate hierarchy: filters/summary stay compact so
-// the real Site Plan can dominate the workspace; the side panel shows
-// EITHER the ranked list OR the selected hotspot's detail, never both at
-// once (two simultaneous side panels was the exact "competing surfaces"
-// jank this pass exists to remove); the Work Order list is a collapsed-by-
-// default detail section, not a second table fighting the map for
-// attention.
+// Layout: the Site Plan is the dominant surface; a low-chrome rail beside
+// it shows EITHER the ranked Locations list OR the selected hotspot's
+// detail (never both); the full matching-Work-Order list is a quiet
+// collapsible beneath. One vertical rhythm, minimal borders.
 export default function SiteMapAnalyze({ propertyId, restored, onBackState }) {
-  const dateRange = useDateRangeFilter(restored);
-  const [category, setCategory] = useState(restored?.category ?? "");
-  const [workTypeId, setWorkTypeId] = useState(restored?.workTypeId ?? "");
-  const [status, setStatus] = useState(restored?.status ?? "");
+  const filters = useWorkOrderReportFilters(restored);
+  const { dateRange } = filters;
   const [selectedHotspotKey, setSelectedHotspotKey] = useState(restored?.selectedHotspotKey ?? null);
   const [showWorkOrders, setShowWorkOrders] = useState(false);
 
-  const [workTypes, setWorkTypes] = useState([]);
-  useEffect(() => {
-    let cancelled = false;
-    getWorkTypes()
-      .then((rows) => {
-        if (!cancelled) setWorkTypes(rows);
-      })
-      .catch(() => {
-        // Non-fatal — the Work Type filter just stays empty.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const visibleWorkTypes = useMemo(() => (category ? workTypes.filter((wt) => wt.category === category) : workTypes), [workTypes, category]);
-
-  function handleCategoryChange(next) {
-    setCategory(next);
-    // Work Type reacts to Category — an invalid combination (a Work Type
-    // that belongs to the OLD category) is cleared rather than silently
-    // kept, so filters never end up in a state the UI itself wouldn't let
-    // you construct directly.
-    setWorkTypeId("");
-  }
-
-  function clearFilters() {
-    dateRange.setRangeKey("last_12_months");
-    setCategory("");
-    setWorkTypeId("");
-    setStatus("");
-  }
-
-  const hasActiveFilters = category || workTypeId || status || dateRange.rangeKey !== "last_12_months";
-
-  const filterParams = useMemo(
-    () => ({
-      propertyId,
-      startDate: dateRange.startDate || undefined,
-      endDate: dateRange.endDate || undefined,
-      category: category || undefined,
-      workTypeId: workTypeId || undefined,
-      status: status || undefined,
-    }),
-    [propertyId, dateRange.startDate, dateRange.endDate, category, workTypeId, status]
-  );
+  const filterParams = useMemo(() => ({ propertyId, ...filters.params }), [propertyId, filters.params]);
 
   const { data, status: dataStatus, retry } = useOperationalReport(filterParams, { enabled: dateRange.isValid });
 
   // A hotspot selected under the OLD filters may not exist in the new
-  // result — never keep the side panel pointed at a hotspot that isn't
-  // actually part of the dataset currently on screen.
+  // result — never keep the rail pointed at a hotspot that isn't part of
+  // the dataset currently on screen.
   useEffect(() => {
     if (!data) return;
-    setSelectedHotspotKey((prevKey) => (prevKey && data.hotspots.some((h) => hotspotKey(h.locationId) === prevKey) ? prevKey : null));
+    setSelectedHotspotKey((prevKey) =>
+      prevKey && data.hotspots.some((h) => hotspotKey(h.locationId) === prevKey) ? prevKey : null
+    );
   }, [data]);
 
   const [sitePlanStatus, setSitePlanStatus] = useState("loading");
@@ -131,7 +94,10 @@ export default function SiteMapAnalyze({ propertyId, restored, onBackState }) {
     };
   }, [propertyId]);
 
-  const { status: fileStatus, fileUrl, fileObjectType } = useSitePlanFile(propertyId, sitePlanStatus === "ready" ? sitePlan : null);
+  const { status: fileStatus, fileUrl, fileObjectType } = useSitePlanFile(
+    propertyId,
+    sitePlanStatus === "ready" ? sitePlan : null
+  );
 
   const markers = useMemo(() => {
     if (!data) return [];
@@ -147,304 +113,280 @@ export default function SiteMapAnalyze({ propertyId, restored, onBackState }) {
 
   // Exactly the Work Order ids the server already attributed to this
   // hotspot when it computed hotspot.count/hotspot.spend — never a
-  // client-side re-match, so the detail panel's list is guaranteed to be
-  // the same set that produced the numbers above it.
+  // client-side re-match.
   const selectedHotspotWorkOrders = useMemo(() => {
     if (!data || !selectedHotspot) return [];
     const idSet = new Set(selectedHotspot.workOrderIds);
     return data.workOrders.filter((wo) => idSet.has(wo.id));
   }, [data, selectedHotspot]);
 
-  const selectedHotspotTopCategories = useMemo(() => {
+  // Most frequent Work Type among this hotspot's own Work Orders — derived
+  // client-side from the already-returned rows (no extra request). Ties
+  // resolve to the earliest-created (the list is createdAt-ascending).
+  const selectedHotspotMostCommonWorkType = useMemo(() => {
     const counts = new Map();
     for (const wo of selectedHotspotWorkOrders) {
-      const label = wo.categoryLabel ?? "Uncategorized";
+      const label = wo.workTypeLabel ?? "Unspecified";
       counts.set(label, (counts.get(label) ?? 0) + 1);
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2);
+    let best = null;
+    let bestCount = 0;
+    for (const [label, count] of counts) {
+      if (count > bestCount) {
+        best = label;
+        bestCount = count;
+      }
+    }
+    return best;
   }, [selectedHotspotWorkOrders]);
 
   const selectedHotspotMostRecent = useMemo(() => {
     if (selectedHotspotWorkOrders.length === 0) return null;
-    return selectedHotspotWorkOrders.reduce((latest, wo) => (wo.createdAt > latest ? wo.createdAt : latest), selectedHotspotWorkOrders[0].createdAt);
+    return selectedHotspotWorkOrders.reduce(
+      (latest, wo) => (wo.createdAt > latest ? wo.createdAt : latest),
+      selectedHotspotWorkOrders[0].createdAt
+    );
   }, [selectedHotspotWorkOrders]);
 
-  const analyzeFilters = { ...dateRange.toState(), category, workTypeId, status, selectedHotspotKey };
+  const analyzeFilters = { ...filters.toState(), selectedHotspotKey };
   const backState = onBackState
     ? onBackState(analyzeFilters)
     : { backLabel: "Site Map", backTo: `/portfolio/${propertyId}`, backTabState: { tab: "map", mapMode: "analyze", analyzeFilters } };
 
+  const rangeInvalid = !dateRange.isValid && dateRange.rangeKey === "custom";
+  // A hard error with no prior result to fall back on → the map area shows
+  // the error + Retry. An error while stale data is still on screen → keep
+  // the map, surface the failure quietly on the summary line instead.
+  const hardError = dataStatus === "error" && !data;
+
   return (
-    <div>
-      {/* FILTERS — one compact row: [ Date Range ▾ ] [ Category ▾ ]
-          [ Work Type ▾ ] [ Status ▾ ] Reset. Every control is h-8 so they
-          align; advanced date choices live inside the Date Range popover
-          rather than a permanent button row. No separate "what am I
-          looking at" text line — the controls already say it. */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <DateRangeControl
-          rangeKey={dateRange.rangeKey}
-          setRangeKey={dateRange.setRangeKey}
-          customStart={dateRange.customStart}
-          setCustomStart={dateRange.setCustomStart}
-          customEnd={dateRange.customEnd}
-          setCustomEnd={dateRange.setCustomEnd}
-          startDate={dateRange.startDate}
-          endDate={dateRange.endDate}
-          error={dateRange.error}
-        />
+    <div className="space-y-4">
+      <WorkOrderReportFilters filters={filters} />
 
-        <select
-          value={category}
-          onChange={(e) => handleCategoryChange(e.target.value)}
-          aria-label="Category"
-          className="h-8 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink"
-        >
-          <option value="">All Categories</option>
-          {WORK_ORDER_CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={workTypeId}
-          onChange={(e) => setWorkTypeId(e.target.value)}
-          aria-label="Work Type"
-          className="h-8 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink"
-        >
-          <option value="">All Work Types</option>
-          {visibleWorkTypes.map((wt) => (
-            <option key={wt.id} value={wt.id}>
-              {wt.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          aria-label="Status"
-          className="h-8 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink"
-        >
-          <option value="">All Statuses</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-
-        {hasActiveFilters && (
-          <button type="button" onClick={clearFilters} className="text-sm font-medium text-ink-muted transition hover:text-ink-secondary">
-            Reset
-          </button>
-        )}
-      </div>
-
-      {dataStatus === "loading" && <SectionSpinner />}
-
-      {dataStatus === "error" && (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line bg-surface px-6 py-10 text-center">
-          <IconAlertTriangle className="h-5 w-5 text-ink-muted" />
-          <p className="text-sm text-ink-secondary">Something went wrong loading this data.</p>
-          <button type="button" onClick={retry} className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink-secondary transition hover:bg-surface-subtle">
-            Retry
-          </button>
-        </div>
-      )}
-
-      {!dateRange.isValid && dateRange.rangeKey === "custom" && (
-        <p className="rounded-xl border border-dashed border-line bg-surface px-6 py-10 text-center text-sm text-ink-secondary">{dateRange.error}</p>
-      )}
-
-      {(dataStatus === "ready" || dataStatus === "refreshing") && data && (
-        <div className="space-y-4">
-          {/* One compact metrics strip — deliberately plain text with hairline
-              middot dividers, never a grid of bordered cards, so it never
-              outweighs the Site Plan below it. */}
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm">
-            <span>
-              <strong className="font-semibold text-ink">{data.summary.workOrderCount}</strong> <span className="text-ink-secondary">Repairs</span>
-            </span>
-            <span className="text-ink-muted" aria-hidden="true">·</span>
-            <span>
-              <strong className="font-semibold text-ink">{formatMoney(data.summary.totalSpend)}</strong> <span className="text-ink-secondary">Spend</span>
-            </span>
-            <span className="text-ink-muted" aria-hidden="true">·</span>
-            <span>
-              <strong className="font-semibold text-ink">{data.summary.mappedCount}</strong> <span className="text-ink-secondary">Mapped</span>
-            </span>
-            <span className="text-ink-muted" aria-hidden="true">·</span>
-            <span>
-              <strong className="font-semibold text-ink">{data.summary.unmappedCount}</strong> <span className="text-ink-secondary">Unmapped</span>
-            </span>
-            {dataStatus === "refreshing" && (
-              <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-line border-t-ink-muted" aria-hidden="true" />
-                Updating…
+      {/* Summary — one plain line. Repairs + spend are the answer; the
+          mapped ratio is a quiet diagnostic, not a co-equal headline. */}
+      {dateRange.isValid && !hardError && (
+        <p className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+          {data ? (
+            <>
+              <span className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+                <span>
+                  <strong className="font-semibold tabular-nums text-ink">{data.summary.workOrderCount}</strong>{" "}
+                  <span className="text-ink-secondary">repairs</span>
+                </span>
+                <span>
+                  <strong className="font-semibold tabular-nums text-ink">{analyzeMoney(data.summary.totalSpend)}</strong>{" "}
+                  <span className="text-ink-secondary">spend</span>
+                </span>
               </span>
-            )}
-          </div>
+              {data.summary.workOrderCount > 0 && (
+                <span className="tabular-nums text-xs text-ink-muted">
+                  {data.summary.mappedCount} of {data.summary.workOrderCount} mapped
+                </span>
+              )}
+              {dataStatus === "refreshing" && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-line border-t-ink-muted" aria-hidden="true" />
+                  Updating…
+                </span>
+              )}
+              {dataStatus === "error" && (
+                <span className="inline-flex items-center gap-2 text-xs text-ink-muted">
+                  Couldn't update
+                  <button type="button" onClick={retry} className="font-medium text-ink-secondary underline-offset-2 hover:underline">
+                    Retry
+                  </button>
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-line border-t-ink-muted" aria-hidden="true" />
+              Loading repairs…
+            </span>
+          )}
+        </p>
+      )}
 
-          {/* MAIN WORKSPACE: the real Site Plan (dominant) + a single side
-              panel that is EITHER Top Repeat Locations OR the selected
-              hotspot's detail — never both at once. */}
-          <div className={`grid grid-cols-1 gap-4 transition-opacity xl:grid-cols-[minmax(0,1fr)_320px] ${dataStatus === "refreshing" ? "opacity-60" : ""}`} aria-busy={dataStatus === "refreshing"}>
-            <div className="relative">
-              {sitePlanStatus === "loading" && <SectionSpinner />}
-              {sitePlanStatus === "error" && (
-                <EmptyState icon={IconAlertTriangle} title="Couldn't load the site map" description="Something went wrong while loading this property's site plan. Please try again." />
-              )}
-              {sitePlanStatus === "none" && (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line bg-surface px-6 py-24 text-center">
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-subtle text-ink-muted">
-                    <IconWrench className="h-5 w-5" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-ink">No Site Plan uploaded for this Property</h3>
-                  <p className="mt-1.5 max-w-sm text-sm text-ink-secondary">Repairs, spend, and Top Repeat Locations below are unaffected — upload a Site Plan from the Active map to see them plotted spatially too.</p>
-                </div>
-              )}
-              {sitePlanStatus === "ready" && (
-                <>
-                  {data.summary.workOrderCount === 0 && (
-                    <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-lg border border-line bg-surface/95 px-3 py-1.5 text-xs font-medium text-ink-secondary shadow-sm backdrop-blur-sm">
-                      No repairs match these filters
-                    </div>
-                  )}
-                  <SitePlanCanvas fileStatus={fileStatus} fileUrl={fileUrl} fileObjectType={fileObjectType} height="72vh" markers={markers} />
-                </>
-              )}
-            </div>
-
-            {/* SIDE PANEL — one surface, one job at a time. */}
-            <div className="rounded-xl border border-line bg-surface">
-              {!selectedHotspot ? (
-                <>
-                  <h2 className="border-b border-line px-4 py-3 text-sm font-semibold text-ink">Top Repeat Locations</h2>
-                  {data.hotspots.length === 0 ? (
-                    <p className="px-4 py-6 text-sm text-ink-secondary">No matching repairs for these filters.</p>
-                  ) : (
-                    <ul className="max-h-[560px] divide-y divide-line overflow-y-auto">
-                      {data.hotspots.map((h, index) => {
-                        const key = hotspotKey(h.locationId);
-                        return (
-                          <li key={key}>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedHotspotKey(key)}
-                              className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition hover:bg-surface-subtle"
-                            >
-                              <span className="flex min-w-0 items-baseline gap-2">
-                                <span className="shrink-0 text-xs font-medium tabular-nums text-ink-muted">{index + 1}</span>
-                                <span className="min-w-0">
-                                  <span className="block truncate text-sm font-medium text-ink">{h.locationLabel}</span>
-                                  <span className="text-xs text-ink-secondary">
-                                    {h.workOrderCount} repair{h.workOrderCount === 1 ? "" : "s"}
-                                    {h.mapX == null && " · not mapped"}
-                                  </span>
-                                </span>
-                              </span>
-                              <span className="shrink-0 text-sm font-medium tabular-nums text-ink">{formatMoney(h.spend)}</span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </>
-              ) : (
-                <div className="p-4">
+      {/* Workspace — Site Plan (dominant) + a low-chrome rail. */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="relative">
+          {rangeInvalid ? (
+            <MapFootprint>
+              <CalmNotice icon={IconAlertTriangle} title="Check the date range">
+                {dateRange.error}
+              </CalmNotice>
+            </MapFootprint>
+          ) : hardError ? (
+            <MapFootprint>
+              <CalmNotice
+                icon={IconAlertTriangle}
+                title="Couldn't load this data"
+                action={
                   <button
                     type="button"
-                    onClick={() => setSelectedHotspotKey(null)}
-                    className="mb-3 inline-flex items-center gap-1 text-xs font-medium text-ink-secondary transition hover:text-ink"
+                    onClick={retry}
+                    className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink-secondary transition hover:bg-surface-subtle"
                   >
-                    <IconArrowLeft className="h-3.5 w-3.5" />
-                    Top Repeat Locations
+                    Retry
                   </button>
+                }
+              />
+            </MapFootprint>
+          ) : sitePlanStatus === "error" || fileStatus === "error" ? (
+            <MapFootprint>
+              <CalmNotice icon={IconAlertTriangle} title="Couldn't load the Site Plan">
+                Something went wrong loading this Property's Site Plan.
+              </CalmNotice>
+            </MapFootprint>
+          ) : sitePlanStatus === "none" ? (
+            <MapFootprint>
+              <CalmNotice icon={IconWrench} title="No Site Plan uploaded">
+                Repairs, spend, and ranked Locations are unaffected — upload a Site Plan from the Active map to see them
+                plotted spatially.
+              </CalmNotice>
+            </MapFootprint>
+          ) : sitePlanStatus === "loading" || fileStatus !== "ready" ? (
+            <MapFootprint>
+              <span className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-accent" aria-hidden="true" />
+            </MapFootprint>
+          ) : (
+            <>
+              {data && data.summary.workOrderCount === 0 && (
+                <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-lg border border-line bg-surface/95 px-3 py-1.5 text-xs font-medium text-ink-secondary shadow-sm backdrop-blur-sm">
+                  No repairs match these filters
+                </div>
+              )}
+              <SitePlanCanvas
+                fileStatus={fileStatus}
+                fileUrl={fileUrl}
+                fileObjectType={fileObjectType}
+                height={MAP_HEIGHT}
+                markers={markers}
+                onBackgroundClick={() => setSelectedHotspotKey(null)}
+              />
+            </>
+          )}
+        </div>
 
-                  <h3 className="text-base font-semibold text-ink">{selectedHotspot.locationLabel}</h3>
-                  <dl className="mt-2 flex items-center gap-4 text-sm">
+        {/* Rail — supporting information beside the map, not a second panel.
+            Hidden entirely on a zero-result view (the map already says so —
+            no duplicate message here). */}
+        {data && data.summary.workOrderCount > 0 && (
+          <div className="xl:h-[72vh] xl:overflow-y-auto xl:border-l xl:border-line xl:pl-5">
+            {!selectedHotspot ? (
+              <div>
+                <h2 className={LABEL}>Top Repeat Locations</h2>
+                <ul className="mt-2 divide-y divide-line">
+                  {data.hotspots.map((h) => {
+                    const key = hotspotKey(h.locationId);
+                    return (
+                      <li key={key}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedHotspotKey(key)}
+                          className="block w-full px-1 py-2.5 text-left transition hover:bg-surface-subtle"
+                        >
+                          <span className="block truncate text-sm font-medium text-ink">{h.locationLabel}</span>
+                          <span className="mt-0.5 block text-xs tabular-nums text-ink-secondary">
+                            {h.workOrderCount} repair{h.workOrderCount === 1 ? "" : "s"} · {analyzeMoney(h.spend)}
+                            {h.mapX == null && " · not mapped"}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedHotspotKey(null)}
+                  className="inline-flex items-center gap-1 text-sm font-medium text-ink-secondary transition hover:text-ink"
+                >
+                  <IconArrowLeft className="h-4 w-4" />
+                  Locations
+                </button>
+
+                <div>
+                  <h2 className="text-base font-semibold text-ink">{selectedHotspot.locationLabel}</h2>
+                  <div className="mt-3 flex gap-8">
                     <div>
-                      <dt className="text-xs text-ink-muted">Repairs</dt>
-                      <dd className="font-semibold tabular-nums text-ink">{selectedHotspot.workOrderCount}</dd>
+                      <div className="text-lg font-semibold tabular-nums text-ink">{selectedHotspot.workOrderCount}</div>
+                      <div className={LABEL}>Repairs</div>
                     </div>
                     <div>
-                      <dt className="text-xs text-ink-muted">Spend</dt>
-                      <dd className="font-semibold tabular-nums text-ink">{formatMoney(selectedHotspot.spend)}</dd>
+                      <div className="text-lg font-semibold tabular-nums text-ink">
+                        {analyzeMoney(selectedHotspot.spend)}
+                      </div>
+                      <div className={LABEL}>Spend</div>
                     </div>
-                  </dl>
-                  {selectedHotspotTopCategories.length > 0 && (
-                    <p className="mt-2 text-xs text-ink-secondary">Top: {selectedHotspotTopCategories.map(([label, count]) => `${label} (${count})`).join(", ")}</p>
-                  )}
-                  {selectedHotspotMostRecent && <p className="mt-1 text-xs text-ink-secondary">Most recent: {formatShortDate(selectedHotspotMostRecent)}</p>}
+                  </div>
+                </div>
 
-                  <ul className="mt-3 max-h-[400px] divide-y divide-line overflow-y-auto border-t border-line pt-2">
+                <div>
+                  <h3 className={LABEL}>Most common</h3>
+                  <p className="mt-1 text-sm text-ink">{selectedHotspotMostCommonWorkType || "—"}</p>
+                </div>
+
+                <div>
+                  <h3 className={LABEL}>Most recent</h3>
+                  <p className="mt-1 text-sm text-ink">
+                    {selectedHotspotMostRecent ? analyzeDate(selectedHotspotMostRecent) : "—"}
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className={LABEL}>Work Orders</h3>
+                  <ul className="mt-1 divide-y divide-line">
                     {selectedHotspotWorkOrders.map((wo) => (
                       <li key={wo.id}>
-                        <Link to={`/portfolio/${propertyId}/work-orders/${wo.id}`} state={backState} className="flex items-center justify-between gap-2 py-2 text-sm transition hover:text-accent">
-                          <span className="min-w-0">
-                            <span className="block truncate text-ink">{wo.title}</span>
-                            <span className="text-xs text-ink-muted">{formatShortDate(wo.createdAt)}</span>
-                          </span>
-                          <span className="flex shrink-0 items-center gap-2">
-                            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${statusBadge[wo.status] || "bg-surface-subtle text-ink-secondary"}`}>
-                              {statusLabel[wo.status] || wo.status}
-                            </span>
-                            <span className="tabular-nums text-ink-secondary">{formatMoney(wo.spend)}</span>
-                          </span>
-                        </Link>
+                        <AnalyzeWorkOrderRow
+                          workOrder={wo}
+                          to={`/portfolio/${propertyId}/work-orders/${wo.id}`}
+                          state={backState}
+                        />
                       </li>
                     ))}
                   </ul>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* SECONDARY, collapsed by default: every matching Work Order,
-              mapped or not — the same authoritative list, never dropped
-              just because it lacks a coordinate. The map is the primary
-              surface; this is a detail drawer beneath it, not a second
-              table competing for attention. */}
-          <div>
-            <button type="button" onClick={() => setShowWorkOrders((v) => !v)} className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-              Matching Work Orders ({data.workOrders.length})
-              <IconChevronDown className={`h-4 w-4 text-ink-muted transition-transform ${showWorkOrders ? "" : "-rotate-90"}`} />
-            </button>
-            {showWorkOrders && (
-              <div className="mt-3">
-                {data.workOrders.length === 0 ? (
-                  <EmptyState icon={IconWrench} title="No Work Orders match these filters" description="Adjust the date range, category, work type, or status." />
-                ) : (
-                  <div className="divide-y divide-line rounded-xl border border-line bg-surface">
-                    {data.workOrders.map((wo) => (
-                      <Link key={wo.id} to={`/portfolio/${propertyId}/work-orders/${wo.id}`} state={backState} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-4 py-3 transition hover:bg-surface-subtle">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-ink">{wo.title}</p>
-                          <p className="truncate text-xs text-ink-secondary">
-                            {wo.locationLabel}
-                            {" · Reported "}
-                            {formatShortDate(wo.createdAt)}
-                            {wo.mapX == null && " · Unmapped"}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-3">
-                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadge[wo.status] || "bg-surface-subtle text-ink-secondary"}`}>{statusLabel[wo.status] || wo.status}</span>
-                          <span className="text-right">
-                            <span className="block text-[10px] uppercase tracking-wide text-ink-muted">Spend</span>
-                            <span className="font-medium tabular-nums text-ink">{formatMoney(wo.spend)}</span>
-                          </span>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
           </div>
+        )}
+      </div>
+
+      {/* Full matching set — a quiet collapsible, the only place truly
+          unmapped / "Unspecified Location" repairs surface. */}
+      {data && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowWorkOrders((v) => !v)}
+            className={`flex items-center gap-1.5 transition hover:text-ink-secondary ${LABEL}`}
+          >
+            Matching Work Orders ({data.workOrders.length})
+            <IconChevronDown className={`h-3.5 w-3.5 transition-transform ${showWorkOrders ? "" : "-rotate-90"}`} />
+          </button>
+          {showWorkOrders &&
+            (data.workOrders.length === 0 ? (
+              <p className="mt-3 text-sm text-ink-secondary">No Work Orders match these filters.</p>
+            ) : (
+              <div className="mt-3 overflow-hidden rounded-xl border border-line bg-surface">
+                <ul className="divide-y divide-line">
+                  {data.workOrders.map((wo) => (
+                    <li key={wo.id}>
+                      <AnalyzeWorkOrderRow
+                        workOrder={wo}
+                        to={`/portfolio/${propertyId}/work-orders/${wo.id}`}
+                        state={backState}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
         </div>
       )}
     </div>

@@ -63,8 +63,8 @@ export default function DateRangeControl({
         aria-haspopup="true"
         aria-expanded={open}
         aria-label="Date range"
-        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border bg-surface px-3 text-sm text-ink transition hover:bg-surface-subtle ${
-          error ? "border-red-500 dark:border-red-400" : "border-line"
+        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border bg-surface px-3 text-sm text-ink transition hover:bg-surface-subtle focus:outline-none focus:ring-1 focus:ring-line-strong ${
+          error ? "border-red-500 dark:border-red-400" : "border-line focus:border-line-strong"
         }`}
       >
         <span className="tabular-nums">{formatRangeLabel(startDate, endDate)}</span>

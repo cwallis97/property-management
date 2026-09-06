@@ -1,29 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
 import EmptyState from "../components/EmptyState";
 import SectionSpinner from "../components/SectionSpinner";
 import MaintenanceSpendReport from "../components/MaintenanceSpendReport";
-import DateRangeControl from "../components/DateRangeControl";
+import WorkOrderReportFilters from "../components/WorkOrderReportFilters";
 import { statusBadge } from "../components/WorkOrderTable";
 import { IconAlertTriangle, IconWrench, IconChevronDown } from "../components/icons";
-import { getWorkTypes } from "../utils/api";
 import { useOperationalReport } from "../utils/operationalReport";
 import { usePropertyScope } from "../context/PropertyScopeContext";
-import { useDateRangeFilter } from "../utils/useDateRangeFilter";
-import { WORK_ORDER_CATEGORIES } from "../utils/workOrders";
+import { useWorkOrderReportFilters } from "../utils/useWorkOrderReportFilters";
 
 const REPORTS_TABS = [
   { key: "work-orders", label: "Work Orders" },
   { key: "spend", label: "Maintenance Spend" },
-];
-
-const STATUS_OPTIONS = [
-  { value: "open", label: "Open" },
-  { value: "assigned", label: "Assigned" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "waiting", label: "Waiting" },
-  { value: "completed", label: "Completed" },
 ];
 
 const SORT_ACCESSORS = {
@@ -72,38 +62,14 @@ function SortHeader({ label, sortKey, sortBy, sortDir, onSort, className = "" })
 function WorkOrdersReport({ restored }) {
   const { propertyId: scopePropertyId, property: scopeProperty } = usePropertyScope();
 
-  const dateRange = useDateRangeFilter(restored);
-  const [category, setCategory] = useState(restored?.category ?? "");
-  const [workTypeId, setWorkTypeId] = useState(restored?.workTypeId ?? "");
-  const [status, setStatus] = useState(restored?.status ?? "");
+  const filters = useWorkOrderReportFilters(restored);
+  const { dateRange } = filters;
   const [sortBy, setSortBy] = useState(restored?.sortBy ?? "date");
   const [sortDir, setSortDir] = useState(restored?.sortDir ?? "desc");
 
-  const [workTypes, setWorkTypes] = useState([]);
-  useEffect(() => {
-    let cancelled = false;
-    getWorkTypes()
-      .then((rows) => {
-        if (!cancelled) setWorkTypes(rows);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const visibleWorkTypes = useMemo(() => (category ? workTypes.filter((wt) => wt.category === category) : workTypes), [workTypes, category]);
-
   const filterParams = useMemo(
-    () => ({
-      propertyId: scopePropertyId || undefined,
-      startDate: dateRange.startDate || undefined,
-      endDate: dateRange.endDate || undefined,
-      category: category || undefined,
-      workTypeId: workTypeId || undefined,
-      status: status || undefined,
-    }),
-    [scopePropertyId, dateRange.startDate, dateRange.endDate, category, workTypeId, status]
+    () => ({ propertyId: scopePropertyId || undefined, ...filters.params }),
+    [scopePropertyId, filters.params]
   );
 
   const { data, status: dataStatus } = useOperationalReport(filterParams, { enabled: dateRange.isValid });
@@ -130,87 +96,15 @@ function WorkOrdersReport({ restored }) {
     }
   }
 
-  const workOrdersState = { ...dateRange.toState(), category, workTypeId, status, sortBy, sortDir };
+  const workOrdersState = { ...filters.toState(), sortBy, sortDir };
   const backTabState = { tab: "work-orders", workOrdersState };
 
-  const analyzeHandoffState = { ...dateRange.toState(), category, workTypeId, status, selectedHotspotKey: null };
-
-  const hasActiveFilters = category || workTypeId || status || dateRange.rangeKey !== "last_12_months";
-
-  function clearFilters() {
-    dateRange.setRangeKey("last_12_months");
-    setCategory("");
-    setWorkTypeId("");
-    setStatus("");
-  }
+  const analyzeHandoffState = { ...filters.toState(), selectedHotspotKey: null };
 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <DateRangeControl
-            rangeKey={dateRange.rangeKey}
-            setRangeKey={dateRange.setRangeKey}
-            customStart={dateRange.customStart}
-            setCustomStart={dateRange.setCustomStart}
-            customEnd={dateRange.customEnd}
-            setCustomEnd={dateRange.setCustomEnd}
-            startDate={dateRange.startDate}
-            endDate={dateRange.endDate}
-            error={dateRange.error}
-          />
-
-          <select
-            value={category}
-            onChange={(e) => {
-              setCategory(e.target.value);
-              setWorkTypeId("");
-            }}
-            aria-label="Category"
-            className="h-8 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink"
-          >
-            <option value="">All Categories</option>
-            {WORK_ORDER_CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={workTypeId}
-            onChange={(e) => setWorkTypeId(e.target.value)}
-            aria-label="Work Type"
-            className="h-8 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink"
-          >
-            <option value="">All Work Types</option>
-            {visibleWorkTypes.map((wt) => (
-              <option key={wt.id} value={wt.id}>
-                {wt.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            aria-label="Status"
-            className="h-8 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink"
-          >
-            <option value="">All Statuses</option>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-
-          {hasActiveFilters && (
-            <button type="button" onClick={clearFilters} className="text-sm font-medium text-ink-muted transition hover:text-ink-secondary">
-              Reset
-            </button>
-          )}
-        </div>
+        <WorkOrderReportFilters filters={filters} />
 
         {scopePropertyId ? (
           <Link
