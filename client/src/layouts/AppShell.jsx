@@ -3,10 +3,12 @@ import Sidebar from "./Sidebar";
 import Header from "./Header";
 import { PropertyScopeProvider } from "../context/PropertyScopeContext";
 import { AuthProvider } from "../context/AuthContext";
+import { NotificationsProvider } from "../context/NotificationsContext";
 
 export default function AppShell() {
   return (
     <AuthProvider>
+      <NotificationsProvider>
       <PropertyScopeProvider>
         <div className="flex h-screen overflow-hidden bg-page">
           <Sidebar />
@@ -20,6 +22,7 @@ export default function AppShell() {
           </div>
         </div>
       </PropertyScopeProvider>
+      </NotificationsProvider>
     </AuthProvider>
   );
 }

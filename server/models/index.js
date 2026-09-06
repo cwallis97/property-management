@@ -23,6 +23,7 @@ import { initWorkOrderVendorModel, WorkOrderVendor } from "./WorkOrderVendor.js"
 import { initDocumentModel, Document, DOCUMENT_CATEGORIES, DOCUMENT_ALLOWED_MIME_TYPES } from "./Document.js";
 import { initInvitationModel, Invitation, INVITE_ROLES } from "./Invitation.js";
 import { initAuditEventModel, AuditEvent, ENTITY_TYPES, AUDIT_ACTIONS } from "./AuditEvent.js";
+import { initNotificationModel, Notification, NOTIFICATION_TYPES } from "./Notification.js";
 
 initUserModel(sequelize);
 initCompanyModel(sequelize);
@@ -43,6 +44,7 @@ initWorkOrderVendorModel(sequelize);
 initDocumentModel(sequelize);
 initInvitationModel(sequelize);
 initAuditEventModel(sequelize);
+initNotificationModel(sequelize);
 
 User.belongsToMany(Company, { through: Membership, foreignKey: "userId", otherKey: "companyId", as: "companies" });
 Company.belongsToMany(User, { through: Membership, foreignKey: "companyId", otherKey: "userId", as: "users" });
@@ -212,6 +214,23 @@ AuditEvent.belongsTo(Membership, { foreignKey: "actorMembershipId", as: "actorMe
 User.hasMany(AuditEvent, { foreignKey: "actorUserId", as: "auditEvents", onDelete: "SET NULL" });
 AuditEvent.belongsTo(User, { foreignKey: "actorUserId", as: "actorUser" });
 
+// Notification — Company-scoped inbox rows, all CASCADE (a notification
+// has no independent meaning once its Company / recipient Membership /
+// recipient User is gone). property_id is SET NULL so a deleted Property
+// never blocks a recipient from reading their own inbox. Deliberately no
+// actor FK (only an actor_name snapshot) — this is not an audit trail.
+Company.hasMany(Notification, { foreignKey: "companyId", as: "notifications", onDelete: "CASCADE" });
+Notification.belongsTo(Company, { foreignKey: "companyId", as: "company" });
+
+Membership.hasMany(Notification, { foreignKey: "recipientMembershipId", as: "notifications", onDelete: "CASCADE" });
+Notification.belongsTo(Membership, { foreignKey: "recipientMembershipId", as: "recipientMembership" });
+
+User.hasMany(Notification, { foreignKey: "recipientUserId", as: "notifications", onDelete: "CASCADE" });
+Notification.belongsTo(User, { foreignKey: "recipientUserId", as: "recipientUser" });
+
+Property.hasMany(Notification, { foreignKey: "propertyId", as: "notifications", onDelete: "SET NULL" });
+Notification.belongsTo(Property, { foreignKey: "propertyId", as: "property" });
+
 export {
   sequelize,
   User,
@@ -251,4 +270,6 @@ export {
   AuditEvent,
   ENTITY_TYPES,
   AUDIT_ACTIONS,
+  Notification,
+  NOTIFICATION_TYPES,
 };

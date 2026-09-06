@@ -17,6 +17,7 @@ import reportRoutes from "./routes/reportRoutes.js";
 import inviteRoutes from "./routes/inviteRoutes.js";
 import auditEventRoutes from "./routes/auditEventRoutes.js";
 import searchRoutes from "./routes/searchRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { ensureUploadDir as ensureSitePlanUploadDir } from "./utils/sitePlanStorage.js";
 import { ensureUploadDir as ensureDocumentUploadDir } from "./utils/documentStorage.js";
@@ -49,6 +50,7 @@ app.use("/api/members", membershipRoutes);
 app.use("/api/invites", inviteRoutes);
 app.use("/api/audit-events", auditEventRoutes);
 app.use("/api/search", searchRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.use(errorHandler);
 

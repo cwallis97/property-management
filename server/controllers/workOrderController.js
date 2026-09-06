@@ -20,6 +20,8 @@ import { CAPABILITIES, requireCapability, hasCapability } from "../authorization
 import { getAccessiblePropertyIds, requirePropertyAccess, membershipHasPropertyAccess } from "../authorization/propertyAccess.js";
 import { WORK_ORDER_ACTIONS, canPerformWorkOrderAction } from "../authorization/workOrderActions.js";
 import { recordAuditEvent, resolveActor } from "../services/auditService.js";
+import { createNotifications } from "../services/notificationService.js";
+import { resolveUrgentWorkOrderRecipients } from "../authorization/notificationRecipients.js";
 import { clampLimit, encodeCursor, decodeCursor, cursorWhereClause } from "./auditEventController.js";
 
 // The ONLY field an assigned Technician (no WORK_ORDER_EDIT) may ever
@@ -211,6 +213,24 @@ function serializeAssignee(membership) {
   if (!membership) return null;
   const user = membership.user;
   return { membershipId: membership.id, name: user.displayName || user.email };
+}
+
+// "Riverbend · Unit 12"-style context line for a Work Order notification
+// body — Property name plus Location name when there is one.
+async function workOrderNotificationContext(workOrder, transaction) {
+  const [property, location] = await Promise.all([
+    Property.findByPk(workOrder.propertyId, { attributes: ["name"], transaction }),
+    workOrder.locationId ? Location.findByPk(workOrder.locationId, { attributes: ["name"], transaction }) : null,
+  ]);
+  return [property?.name, location?.name].filter(Boolean).join(" · ") || null;
+}
+
+// A Membership id -> { membershipId, userId } recipient shape (the
+// notification service needs both). Returns null for a missing id.
+async function membershipRecipient(membershipId, transaction) {
+  if (!membershipId) return null;
+  const m = await Membership.findByPk(membershipId, { attributes: ["id", "userId"], transaction });
+  return m ? { membershipId: m.id, userId: m.userId } : null;
 }
 
 // Shared scalar-field validation for create/update. Returns { error } or
@@ -417,22 +437,56 @@ export async function createWorkOrder(req, res) {
     resolvedCompletedAt = null;
   }
 
-  const workOrder = await WorkOrder.create({
-    propertyId: property.id,
-    locationId: location ? location.id : null,
-    assetId: asset ? asset.id : null,
-    title: values.title,
-    description: values.description ?? null,
-    status: values.status ?? undefined,
-    priority: values.priority ?? undefined,
-    dueDate: values.dueDate ?? null,
-    completedAt: resolvedCompletedAt,
-    category: finalCategory,
-    workTypeId: workType ? workType.id : null,
-    photoUrls: values.photoUrls ?? undefined,
-    mapX: values.mapX ?? null,
-    mapY: values.mapY ?? null,
+  // A small transaction only for the urgent-created notification path —
+  // when the new Work Order is urgent, its recipient notifications must
+  // commit atomically with the Work Order itself (a failed notification
+  // insert rolls the create back). A non-urgent create is a single
+  // WorkOrder.create() and the transaction is a no-op cost.
+  let workOrder;
+  await sequelize.transaction(async (t) => {
+    workOrder = await WorkOrder.create(
+      {
+        propertyId: property.id,
+        locationId: location ? location.id : null,
+        assetId: asset ? asset.id : null,
+        title: values.title,
+        description: values.description ?? null,
+        status: values.status ?? undefined,
+        priority: values.priority ?? undefined,
+        dueDate: values.dueDate ?? null,
+        completedAt: resolvedCompletedAt,
+        category: finalCategory,
+        workTypeId: workType ? workType.id : null,
+        photoUrls: values.photoUrls ?? undefined,
+        mapX: values.mapX ?? null,
+        mapY: values.mapY ?? null,
+      },
+      { transaction: t }
+    );
+
+    // "Urgent" is the top of the existing Work Order priority taxonomy
+    // (low/medium/high/urgent) — no separate "critical" state is
+    // introduced for notifications.
+    if (workOrder.priority === "urgent") {
+      const actor = resolveActor(req, property.companyId);
+      const recipients = await resolveUrgentWorkOrderRecipients(property.companyId, property.id);
+      const contextLine = await workOrderNotificationContext(workOrder, t);
+      await createNotifications({
+        transaction: t,
+        companyId: property.companyId,
+        actorMembershipId: actor?.membershipId ?? null,
+        recipients,
+        type: "work_order.urgent_created",
+        title: `Urgent Work Order created: ${workOrder.title}`,
+        body: contextLine,
+        entityType: "work_order",
+        entityId: workOrder.id,
+        propertyId: property.id,
+        actorName: actor?.name ?? null,
+      });
+    }
   });
+
   res.status(201).json(workOrder);
 }
 
@@ -602,11 +656,13 @@ export async function updateWorkOrder(req, res) {
   const previousAssignedMembershipId = workOrder.assignedMembershipId;
   const { assignedMembershipId } = req.body;
   let assigneeAfterForAudit;
+  let newAssigneeMembership = null;
   if (assignedMembershipId !== undefined) {
     const { membership, error } = await resolveAssignedMembershipId(assignedMembershipId, property, req.companyIds);
     if (error) return res.status(error.status).json(error.body);
     workOrder.assignedMembershipId = membership ? membership.id : null;
     assigneeAfterForAudit = serializeAssignee(membership);
+    newAssigneeMembership = membership; // has { id, userId }, or null when cleared
   }
 
   // Same completion invariant as createWorkOrder, plus: staying completed
@@ -666,12 +722,17 @@ export async function updateWorkOrder(req, res) {
   // non-transactional step (Vendor changes are not an audited V1 event)
   // and is deliberately left exactly where it already was, unaffected by
   // this change.
+  // Reopen = a real completed -> not-completed status transition (status
+  // changing between two non-completed values is not a "reopen").
+  const reopened = statusChanged && previousStatus === "completed" && finalStatus !== "completed";
+
   const actor = resolveActor(req, workOrder.property.companyId);
   await sequelize.transaction(async (t) => {
     await workOrder.save({ transaction: t });
 
+    let beforeAssignee = null;
     if (assignmentChanged) {
-      const beforeAssignee = await getAssigneeForWorkOrder(previousAssignedMembershipId);
+      beforeAssignee = await getAssigneeForWorkOrder(previousAssignedMembershipId);
       await recordAuditEvent({
         transaction: t,
         companyId: workOrder.property.companyId,
@@ -700,6 +761,63 @@ export async function updateWorkOrder(req, res) {
         after: { status: finalStatus },
         metadata: { authorizationPath },
       });
+    }
+
+    // ── Notifications ────────────────────────────────────────────────
+    // Same transaction as the mutation + its AuditEvents: a failed
+    // notification insert rolls the whole request back (delivery is part
+    // of the guaranteed business event). Self-suppression + recipient
+    // de-duplication are handled centrally in createNotifications.
+    if (assignmentChanged || reopened) {
+      const contextLine = await workOrderNotificationContext(workOrder, t);
+      const notifBase = {
+        transaction: t,
+        companyId: workOrder.property.companyId,
+        actorMembershipId: actor?.membershipId ?? null,
+        entityType: "work_order",
+        entityId: workOrder.id,
+        propertyId: workOrder.propertyId,
+      };
+
+      if (assignmentChanged) {
+        const newAssigneeName = assigneeAfterForAudit?.name ?? null;
+
+        if (newAssigneeMembership) {
+          await createNotifications({
+            ...notifBase,
+            recipients: [{ membershipId: newAssigneeMembership.id, userId: newAssigneeMembership.userId }],
+            type: "work_order.assigned",
+            title: `${workOrder.title} assigned to you`,
+            body: contextLine,
+          });
+        }
+
+        const prevRecipient = await membershipRecipient(previousAssignedMembershipId, t);
+        if (prevRecipient) {
+          await createNotifications({
+            ...notifBase,
+            recipients: [prevRecipient],
+            type: "work_order.reassigned",
+            title: `${workOrder.title} reassigned`,
+            body: newAssigneeName ? `Now assigned to ${newAssigneeName}` : "This Work Order is no longer assigned to you",
+            actorName: newAssigneeName,
+            metadata: { previousAssignee: beforeAssignee?.name ?? null, newAssignee: newAssigneeName },
+          });
+        }
+      }
+
+      if (reopened && workOrder.assignedMembershipId) {
+        const assigneeRecipient = await membershipRecipient(workOrder.assignedMembershipId, t);
+        if (assigneeRecipient) {
+          await createNotifications({
+            ...notifBase,
+            recipients: [assigneeRecipient],
+            type: "work_order.reopened",
+            title: `${workOrder.title} reopened`,
+            body: contextLine,
+          });
+        }
+      }
     }
   });
 

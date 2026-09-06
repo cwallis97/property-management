@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { auth } from "../firebase";
 import { signOut } from "firebase/auth";
-import { IconBell, IconChevronDown } from "../components/icons";
+import { IconChevronDown } from "../components/icons";
 import GlobalSearch from "../components/GlobalSearch";
 import QuickCreate from "../components/QuickCreate";
+import NotificationBell from "../components/NotificationBell";
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -44,14 +45,7 @@ export default function Header() {
       <div className="flex items-center gap-2">
         <QuickCreate />
 
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-full border border-transparent text-ink-muted"
-        >
-          <IconBell className="h-5 w-5" />
-        </button>
+        <NotificationBell />
 
         <div className="relative ml-1">
           <button

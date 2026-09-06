@@ -2,11 +2,25 @@ import { Op } from "sequelize";
 import { sequelize, Membership, User, Property, PropertyAccess, MEMBERSHIP_ACCESS_MODES } from "../models/index.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 import { recordAuditEvent, resolveActor } from "../services/auditService.js";
+import { createNotifications } from "../services/notificationService.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isValidUUID(value) {
   return typeof value === "string" && UUID_RE.test(value);
+}
+
+const ROLE_LABELS = { owner: "Owner", admin: "Admin", manager: "Manager", technician: "Technician" };
+
+// Human-readable one-liner for a "Your Property access changed"
+// notification body. `added`/`removed` are Property name arrays.
+function summarizeAccessChange(added, removed) {
+  if (added.length === 1 && removed.length === 0) return `${added[0]} added`;
+  if (removed.length === 1 && added.length === 0) return `${removed[0]} removed`;
+  const parts = [];
+  if (added.length) parts.push(`${added.length} ${added.length === 1 ? "Property" : "Properties"} added`);
+  if (removed.length) parts.push(`${removed.length} ${removed.length === 1 ? "Property" : "Properties"} removed`);
+  return parts.join(" · ") || "Access updated";
 }
 
 // A member's role may only ever be changed TO one of these via this
@@ -117,6 +131,39 @@ export async function updateMemberRole(req, res) {
   const actor = resolveActor(req, membership.companyId);
   const targetName = membership.user.displayName || membership.user.email;
 
+  // Both transaction branches below record the same AuditEvent + the same
+  // "Your role changed" Notification for the affected member — one helper
+  // so the two can never drift. No-op suppressed (roleChanged); actor and
+  // target can never be the same Membership here (self-role-change is
+  // rejected upstream), but createNotifications' actor filter is a
+  // harmless no-op regardless.
+  const recordRoleChange = async (t) => {
+    if (!roleChanged) return;
+    await recordAuditEvent({
+      transaction: t,
+      companyId: membership.companyId,
+      actor,
+      action: "membership.role_changed",
+      entityType: "membership",
+      entityId: membership.id,
+      entityLabel: targetName,
+      before: { role: previousRole },
+      after: { role },
+    });
+    await createNotifications({
+      transaction: t,
+      companyId: membership.companyId,
+      actorMembershipId: actor?.membershipId ?? null,
+      recipients: [{ membershipId: membership.id, userId: membership.userId }],
+      type: "membership.role_changed",
+      title: "Your role changed",
+      body: `You are now ${ROLE_LABELS[role] ?? role}`,
+      entityType: "membership",
+      entityId: membership.id,
+      metadata: { previousRole, newRole: role },
+    });
+  };
+
   // Promoting to Admin means "always accessMode = all" per Property Access
   // V1 (see propertyAccess.js) — force it here rather than leaving a
   // restricted Admin as a state this app can reach but never intentionally
@@ -132,37 +179,13 @@ export async function updateMemberRole(req, res) {
       membership.accessMode = "all";
       await membership.save({ transaction: t });
       await PropertyAccess.destroy({ where: { membershipId: membership.id }, transaction: t });
-      if (roleChanged) {
-        await recordAuditEvent({
-          transaction: t,
-          companyId: membership.companyId,
-          actor,
-          action: "membership.role_changed",
-          entityType: "membership",
-          entityId: membership.id,
-          entityLabel: targetName,
-          before: { role: previousRole },
-          after: { role },
-        });
-      }
+      await recordRoleChange(t);
     });
     membership.propertyAccess = [];
   } else {
     await sequelize.transaction(async (t) => {
       await membership.save({ transaction: t });
-      if (roleChanged) {
-        await recordAuditEvent({
-          transaction: t,
-          companyId: membership.companyId,
-          actor,
-          action: "membership.role_changed",
-          entityType: "membership",
-          entityId: membership.id,
-          entityLabel: targetName,
-          before: { role: previousRole },
-          after: { role },
-        });
-      }
+      await recordRoleChange(t);
     });
   }
 
@@ -231,6 +254,7 @@ export async function updateMemberPropertyAccess(req, res) {
 
       if (accessChanged) {
         const nameMap = await resolvePropertyNameMap(previousPropertyIds);
+        const removedNames = previousPropertyIds.map((id) => nameMap[id] ?? null).filter(Boolean);
         await recordAuditEvent({
           transaction: t,
           companyId: membership.companyId,
@@ -245,6 +269,18 @@ export async function updateMemberPropertyAccess(req, res) {
             addedProperties: [],
             removedProperties: previousPropertyIds.map((id) => ({ id, name: nameMap[id] ?? null })),
           },
+        });
+        await createNotifications({
+          transaction: t,
+          companyId: membership.companyId,
+          actorMembershipId: actor?.membershipId ?? null,
+          recipients: [{ membershipId: membership.id, userId: membership.userId }],
+          type: "membership.property_access_changed",
+          title: "Your Property access changed",
+          body: "You now have access to all properties",
+          entityType: "membership",
+          entityId: membership.id,
+          metadata: { addedCount: 0, removedCount: removedNames.length, accessMode: "all" },
         });
       }
     });
@@ -311,6 +347,8 @@ export async function updateMemberPropertyAccess(req, res) {
 
     if (accessChanged) {
       const nameMap = await resolvePropertyNameMap([...new Set([...addedIds, ...removedIds])]);
+      const addedNames = addedIds.map((id) => nameMap[id] ?? null).filter(Boolean);
+      const removedNames = removedIds.map((id) => nameMap[id] ?? null).filter(Boolean);
       await recordAuditEvent({
         transaction: t,
         companyId: membership.companyId,
@@ -325,6 +363,18 @@ export async function updateMemberPropertyAccess(req, res) {
           addedProperties: addedIds.map((id) => ({ id, name: nameMap[id] ?? null })),
           removedProperties: removedIds.map((id) => ({ id, name: nameMap[id] ?? null })),
         },
+      });
+      await createNotifications({
+        transaction: t,
+        companyId: membership.companyId,
+        actorMembershipId: actor?.membershipId ?? null,
+        recipients: [{ membershipId: membership.id, userId: membership.userId }],
+        type: "membership.property_access_changed",
+        title: "Your Property access changed",
+        body: summarizeAccessChange(addedNames, removedNames),
+        entityType: "membership",
+        entityId: membership.id,
+        metadata: { addedCount: addedNames.length, removedCount: removedNames.length, accessMode: "restricted" },
       });
     }
   });

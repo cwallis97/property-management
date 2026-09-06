@@ -454,3 +454,21 @@ export async function openDocumentFile(id) {
 export function getAuditEvents(params) {
   return apiFetch(`/api/audit-events${toQueryString(params)}`);
 }
+
+// Notification Center — every call is recipient-self-scoped server-side
+// (recipient_user_id = the signed-in user); there is no Company param.
+export function getNotifications(params, options) {
+  return apiFetch(`/api/notifications${toQueryString(params)}`, options);
+}
+export function getNotificationUnreadCount(options) {
+  return apiFetch("/api/notifications/unread-count", options);
+}
+export function markNotificationRead(id) {
+  return apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" });
+}
+export function markAllNotificationsRead(before) {
+  return apiFetch("/api/notifications/read-all", {
+    method: "POST",
+    body: JSON.stringify(before ? { before } : {}),
+  });
+}
