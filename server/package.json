@@ -13,7 +13,10 @@
     "migrate": "node db/migrate.js up",
     "migrate:down": "node db/migrate.js down",
     "migrate:down:all": "node db/migrate.js down:all",
-    "migrate:status": "node db/migrate.js status"
+    "migrate:status": "node db/migrate.js status",
+    "qa:map:seed": "node scripts/qa-map-fixture.mjs seed",
+    "qa:map:cleanup": "node scripts/qa-map-fixture.mjs cleanup",
+    "qa:map:status": "node scripts/qa-map-fixture.mjs status"
   },
   "keywords": [],
   "author": "",
