@@ -632,7 +632,7 @@ export default function PropertyDetail() {
 
       {activeTab === "map" && (
         <div>
-          <div className="mb-2 inline-flex rounded-lg border border-line bg-surface-subtle p-1">
+          <div className="mb-4 inline-flex rounded-lg border border-line bg-surface-subtle p-1">
             <button
               type="button"
               onClick={() => setMapMode("active")}

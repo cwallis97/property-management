@@ -5,7 +5,7 @@ import EmptyState from "./EmptyState";
 import SitePlanCanvas from "./SitePlanCanvas";
 import CreateWorkOrderModal from "./CreateWorkOrderModal";
 import { IconAlertTriangle, IconPlus } from "./icons";
-import { priorityBadge, statusBadge, statusLabel } from "./WorkOrderTable";
+import { statusLabel } from "./WorkOrderTable";
 import { getSitePlan, uploadSitePlan } from "../utils/api";
 import { useSitePlanFile } from "../utils/useSitePlanFile";
 import { needsAttention, resolveWorkOrderContext } from "../utils/workOrders";
@@ -15,14 +15,27 @@ import { CAPABILITIES } from "../utils/capabilities";
 const ACCEPTED_MIME_TYPES = ["application/pdf", "image/png", "image/jpeg"];
 const ACCEPTED_ACCEPT_ATTR = ".pdf,.png,.jpg,.jpeg";
 
-// Markers derive their color entirely from the real WorkOrder's own
+// Markers derive their tone entirely from the real WorkOrder's own
 // status/priority — there is no second source of truth to keep in sync.
 // Completed Work Orders never reach here at all (see spatialWorkOrders'
-// filter below), so this only ever distinguishes urgent from everything
-// else currently active.
+// filter below), so this only ever distinguishes the one urgent-attention
+// treatment from normal operational work.
 function markerTone(workOrder) {
   if (needsAttention(workOrder)) return "urgent";
-  return "default";
+  return "operational";
+}
+
+function priorityLabel(priority) {
+  return priority ? priority.charAt(0).toUpperCase() + priority.slice(1) : null;
+}
+
+// "Sep 3" for the current year, "Sep 3, 2024" otherwise — the same
+// convention Reports and Analyze use for a reported date.
+function formatReported(value) {
+  const d = new Date(value);
+  const opts = { month: "short", day: "numeric" };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+  return d.toLocaleDateString("en-US", opts);
 }
 
 export default function SitePlanMap({ propertyId, locations, assets, workOrders, onWorkOrderCreated }) {
@@ -119,52 +132,56 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
   const markers = spatialWorkOrders.map((wo) => {
     const isSelected = selectedWorkOrderId === wo.id;
     const { locationLabel, assetLabel } = resolveWorkOrderContext(wo, locations, assets);
-
+    const metaLine = [locationLabel, statusLabel[wo.status] || wo.status, priorityLabel(wo.priority)]
+      .filter(Boolean)
+      .join(" · ");
     return {
       id: wo.id,
       x: wo.mapX,
       y: wo.mapY,
       tone: markerTone(wo),
-      label: wo.title,
+      selected: isSelected,
+      // HOVER = preview: title + one compact metadata line. Deliberately
+      // lighter than the click inspector (no assignment / asset / action).
+      preview: {
+        title: wo.title,
+        meta: metaLine,
+        sub: `Reported ${formatReported(wo.createdAt)}`,
+      },
+      tooltip: wo.title,
+      ariaLabel: `${wo.title} — ${statusLabel[wo.status] || wo.status}`,
+      // CLICK = inspect: select it; SitePlanCanvas renders `detail` in an
+      // UNSCALED card anchored beside this marker — no map resize, no
+      // re-fit, no transform change. A second click clears it.
       onClick: () => setSelectedWorkOrderId(isSelected ? null : wo.id),
-      popover: isSelected ? (
-        <span
-          onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-full left-1/2 z-10 mb-2 w-56 -translate-x-1/2 cursor-default rounded-xl border border-line bg-surface p-3 text-left shadow-lg"
-        >
-          <p className="truncate text-sm font-medium text-ink">{wo.title}</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                priorityBadge[wo.priority] || "bg-surface-subtle text-ink-secondary"
-              }`}
+      detail: isSelected ? (
+        <>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-semibold text-ink">{wo.title}</p>
+            <button
+              type="button"
+              onClick={() => setSelectedWorkOrderId(null)}
+              aria-label="Close detail card"
+              className="-mr-1 -mt-0.5 shrink-0 rounded p-0.5 text-lg leading-none text-ink-muted transition hover:text-ink"
             >
-              {wo.priority}
-            </span>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                statusBadge[wo.status] || "bg-surface-subtle text-ink-secondary"
-              }`}
-            >
-              {statusLabel[wo.status] || wo.status}
-            </span>
+              ×
+            </button>
           </div>
-          {(locationLabel || assetLabel) && (
-            <p className="mt-1.5 truncate text-xs text-ink-secondary">
-              {locationLabel}
-              {locationLabel && assetLabel && " · "}
-              {assetLabel}
-            </p>
-          )}
+          <p className="mt-0.5 text-xs text-ink-secondary">{metaLine}</p>
+          <div className="mt-2 space-y-0.5 text-xs text-ink-secondary">
+            <p>Reported {formatReported(wo.createdAt)}</p>
+            <p>Assigned to {wo.assignee?.name || "Unassigned"}</p>
+            {assetLabel && <p>Asset: {assetLabel}</p>}
+          </div>
           <Link
             to={`/portfolio/${propertyId}/work-orders/${wo.id}`}
             state={{ backLabel: "Map", backTo: `/portfolio/${propertyId}`, backTabState: { tab: "map" } }}
-            className="mt-2 block text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+            className="mt-2 block text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
           >
             View Work Order →
           </Link>
-        </span>
-      ) : null,
+        </>
+      ) : undefined,
     };
   });
 
@@ -263,16 +280,25 @@ export default function SitePlanMap({ propertyId, locations, assets, workOrders,
 
       {uploadError && <p className="mb-2 text-sm text-red-600 dark:text-red-400">{uploadError}</p>}
 
-      <SitePlanCanvas
-        fileStatus={fileStatus}
-        fileUrl={fileUrl}
-        fileObjectType={fileObjectType}
-        height="72vh"
-        pickMode={reportIssueMode}
-        onPick={handlePick}
-        pendingPoint={pendingPoint}
-        markers={markers}
-      />
+      {/* HOVER = light preview tooltip · CLICK = a compact unscaled
+          inspector card anchored beside the marker (rendered by
+          SitePlanCanvas, outside its zoom/pan transform). Selecting,
+          switching, or clearing a marker never resizes, re-fits, or
+          otherwise moves the Site Plan. Analyze mode keeps its own
+          analytical side panel — deliberate and unchanged. */}
+      <div className="relative">
+        <SitePlanCanvas
+          fileStatus={fileStatus}
+          fileUrl={fileUrl}
+          fileObjectType={fileObjectType}
+          height="72vh"
+          pickMode={reportIssueMode}
+          onPick={handlePick}
+          onBackgroundClick={() => setSelectedWorkOrderId(null)}
+          pendingPoint={pendingPoint}
+          markers={markers}
+        />
+      </div>
 
       {showCreateModal && (
         <CreateWorkOrderModal
