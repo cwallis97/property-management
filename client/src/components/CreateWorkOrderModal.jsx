@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { IconX } from "./icons";
+import { IconX, IconChevronDown } from "./icons";
 import SearchableSelect from "./SearchableSelect";
 import SitePlanCanvas from "./SitePlanCanvas";
 import { getLocationPath } from "../utils/hierarchy";
@@ -14,7 +14,12 @@ const PRIORITIES = [
   { value: "urgent", label: "Urgent" },
 ];
 
-export default function CreateWorkOrderModal({ propertyId, locations, assets, initialMapPosition, onClose, onCreated }) {
+// `propertyLabel` + `onChangeProperty` are optional and only passed by the
+// global Quick Create launcher (QuickCreateWorkOrder): they render a small
+// "which Property" line under the title, and — when onChangeProperty is
+// given — make it a button back to the Property picker. Every existing
+// caller (PropertyDetail) passes neither, so the header is unchanged there.
+export default function CreateWorkOrderModal({ propertyId, locations, assets, initialMapPosition, propertyLabel, onChangeProperty, onClose, onCreated }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [locationId, setLocationId] = useState(null);
@@ -178,12 +183,27 @@ export default function CreateWorkOrderModal({ propertyId, locations, assets, in
   return (
     <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-gray-900/40 px-4 py-8 sm:items-center">
       <div className="w-full max-w-md rounded-2xl bg-surface shadow-xl">
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="text-base font-semibold text-ink">Create Work Order</h2>
+        <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-ink">Create Work Order</h2>
+            {propertyLabel &&
+              (onChangeProperty ? (
+                <button
+                  type="button"
+                  onClick={() => !submitting && onChangeProperty()}
+                  className="mt-0.5 inline-flex max-w-full items-center gap-1 text-xs font-medium text-ink-muted transition hover:text-ink-secondary"
+                >
+                  <span className="truncate">{propertyLabel}</span>
+                  <IconChevronDown className="h-3 w-3 shrink-0" />
+                </button>
+              ) : (
+                <p className="mt-0.5 truncate text-xs text-ink-muted">{propertyLabel}</p>
+              ))}
+          </div>
           <button
             type="button"
             onClick={() => !submitting && onClose()}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition hover:bg-surface-subtle hover:text-ink-secondary"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-muted transition hover:bg-surface-subtle hover:text-ink-secondary"
             aria-label="Close"
           >
             <IconX className="h-4 w-4" />

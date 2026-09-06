@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { IconX } from "./icons";
+import { IconX, IconChevronDown } from "./icons";
 import SearchableSelect from "./SearchableSelect";
 import { getLocationPath } from "../utils/hierarchy";
 import { createAsset } from "../utils/api";
@@ -17,7 +17,10 @@ const STATUSES = [
 // Escape-to-close, Cancel/Submit footer) — deliberately not shared as a
 // generic wrapper, matching this codebase's established preference for
 // small per-file duplication over cross-cutting abstraction.
-export default function CreateAssetModal({ propertyId, locations, onClose, onCreated }) {
+// `propertyLabel` + `onChangeProperty` are optional, passed only by the
+// global Quick Create launcher (QuickCreateAsset) — same additive header
+// treatment as CreateWorkOrderModal. PropertyDetail passes neither.
+export default function CreateAssetModal({ propertyId, locations, propertyLabel, onChangeProperty, onClose, onCreated }) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("operational");
@@ -77,12 +80,27 @@ export default function CreateAssetModal({ propertyId, locations, onClose, onCre
   return (
     <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-gray-900/40 px-4 py-8 sm:items-center">
       <div className="w-full max-w-md rounded-2xl bg-surface shadow-xl">
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="text-base font-semibold text-ink">Add Asset</h2>
+        <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-ink">Add Asset</h2>
+            {propertyLabel &&
+              (onChangeProperty ? (
+                <button
+                  type="button"
+                  onClick={() => !submitting && onChangeProperty()}
+                  className="mt-0.5 inline-flex max-w-full items-center gap-1 text-xs font-medium text-ink-muted transition hover:text-ink-secondary"
+                >
+                  <span className="truncate">{propertyLabel}</span>
+                  <IconChevronDown className="h-3 w-3 shrink-0" />
+                </button>
+              ) : (
+                <p className="mt-0.5 truncate text-xs text-ink-muted">{propertyLabel}</p>
+              ))}
+          </div>
           <button
             type="button"
             onClick={() => !submitting && onClose()}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-muted transition hover:bg-surface-subtle hover:text-ink-secondary"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-muted transition hover:bg-surface-subtle hover:text-ink-secondary"
             aria-label="Close"
           >
             <IconX className="h-4 w-4" />

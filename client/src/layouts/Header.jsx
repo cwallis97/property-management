@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { auth } from "../firebase";
 import { signOut } from "firebase/auth";
-import { IconBell, IconPlus, IconChevronDown } from "../components/icons";
+import { IconBell, IconChevronDown } from "../components/icons";
 import GlobalSearch from "../components/GlobalSearch";
+import QuickCreate from "../components/QuickCreate";
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -40,19 +41,8 @@ export default function Header() {
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b border-line bg-surface/80 px-8 backdrop-blur">
       <GlobalSearch />
 
-      {/* New is not wired to anything yet — disabled and muted rather than
-          styled as a live primary action, so it reads as "not built"
-          instead of "broken." */}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-line px-3.5 py-2 text-sm font-medium text-ink-muted"
-        >
-          <IconPlus className="h-4 w-4" />
-          New
-        </button>
+        <QuickCreate />
 
         <button
           type="button"
