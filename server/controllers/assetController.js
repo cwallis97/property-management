@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import { sequelize, Asset, Location, Property, WorkOrder, WorkType, WorkOrderCostEntry, ASSET_STATUSES } from "../models/index.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 import { getAccessiblePropertyIds, requirePropertyAccess } from "../authorization/propertyAccess.js";
+import { textFieldError, TEXT_LIMITS } from "../validation/text.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -166,6 +167,11 @@ export async function createAsset(req, res) {
   if (notes !== undefined && notes !== null && typeof notes !== "string") {
     return res.status(400).json({ error: "notes must be a string or null." });
   }
+  const assetTextError =
+    textFieldError(name, { field: "name", max: TEXT_LIMITS.name }) ||
+    textFieldError(category, { field: "category", max: TEXT_LIMITS.name, allowNull: true }) ||
+    textFieldError(notes, { field: "notes", max: TEXT_LIMITS.longText, allowNull: true });
+  if (assetTextError) return res.status(400).json({ error: assetTextError });
 
   const { locationId: resolvedLocationId, error } = await resolveLocationId(locationId, property, req.companyIds);
   if (error) return res.status(error.status).json(error.body);
@@ -253,6 +259,12 @@ export async function updateAsset(req, res) {
   if (!requireCapability(req, res, asset.property.companyId, CAPABILITIES.ASSET_EDIT)) return;
 
   const { name, category, status, installDate, notes, locationId } = req.body;
+
+  const assetTextError =
+    textFieldError(name, { field: "name", max: TEXT_LIMITS.name, required: name !== undefined }) ||
+    textFieldError(category, { field: "category", max: TEXT_LIMITS.name, allowNull: true }) ||
+    textFieldError(notes, { field: "notes", max: TEXT_LIMITS.longText, allowNull: true });
+  if (assetTextError) return res.status(400).json({ error: assetTextError });
 
   if (name !== undefined) {
     if (!name || typeof name !== "string") {

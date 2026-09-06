@@ -64,6 +64,12 @@ if (!/test/i.test(dbName)) {
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 process.env.NODE_ENV = process.env.NODE_ENV || "test";
+// A Firebase project id is a public identifier, not a secret (it also
+// ships in the client bundle). The suites that build the real Express app
+// (tests/httpHardening.test.js) load authMiddleware.js, which refuses to
+// import without it. Tests never verify a real token — a placeholder is
+// enough. A real value in the environment still wins.
+process.env.FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "test-firebase-project";
 
 // Dynamic import, deliberately AFTER every check and the env remap above —
 // see this file's own top comment for why static imports would be wrong

@@ -12,6 +12,7 @@ import {
 } from "../models/index.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 import { getAccessiblePropertyIds } from "../authorization/propertyAccess.js";
+import { TEXT_LIMITS } from "../validation/text.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -56,15 +57,28 @@ function validateScalarFields(body, { partial }) {
     if (!body.name || typeof body.name !== "string") {
       return { error: { status: 400, body: { error: "name must be a non-empty string." } } };
     }
+    if (body.name.length > TEXT_LIMITS.name) {
+      return { error: { status: 400, body: { error: `name must be ${TEXT_LIMITS.name} characters or fewer.` } } };
+    }
     values.name = body.name;
   } else if (!partial) {
     return { error: { status: 400, body: { error: "name is required." } } };
   }
 
+  const FIELD_MAX = {
+    category: TEXT_LIMITS.name,
+    contactName: TEXT_LIMITS.name,
+    phone: TEXT_LIMITS.phone,
+    email: TEXT_LIMITS.email,
+    notes: TEXT_LIMITS.longText,
+  };
   for (const field of ["category", "contactName", "phone", "email", "notes"]) {
     if (body[field] !== undefined) {
       if (body[field] !== null && typeof body[field] !== "string") {
         return { error: { status: 400, body: { error: `${field} must be a string or null.` } } };
+      }
+      if (typeof body[field] === "string" && body[field].length > FIELD_MAX[field]) {
+        return { error: { status: 400, body: { error: `${field} must be ${FIELD_MAX[field]} characters or fewer.` } } };
       }
       values[field] = body[field];
     }

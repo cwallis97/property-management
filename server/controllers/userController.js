@@ -1,3 +1,5 @@
+import { TEXT_LIMITS } from "../validation/text.js";
+
 export function getCurrentUser(req, res) {
   res.json({
     ...req.user.toJSON(),
@@ -27,6 +29,9 @@ export async function updateCurrentUser(req, res) {
   if (displayName !== undefined) {
     if (displayName !== null && typeof displayName !== "string") {
       return res.status(400).json({ error: "displayName must be a string or null." });
+    }
+    if (typeof displayName === "string" && displayName.length > TEXT_LIMITS.name) {
+      return res.status(400).json({ error: `displayName must be ${TEXT_LIMITS.name} characters or fewer.` });
     }
     req.user.displayName = displayName?.trim() || null;
   }

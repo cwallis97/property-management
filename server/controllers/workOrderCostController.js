@@ -5,6 +5,7 @@ import { CAPABILITIES, hasCapability } from "../authorization/capabilities.js";
 import { requirePropertyAccess } from "../authorization/propertyAccess.js";
 import { WORK_ORDER_ACTIONS, requireWorkOrderAction } from "../authorization/workOrderActions.js";
 import { recordAuditEvent, resolveActor } from "../services/auditService.js";
+import { TEXT_LIMITS } from "../validation/text.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -102,6 +103,9 @@ export async function createWorkOrderCost(req, res) {
   }
   if (note !== undefined && note !== null && typeof note !== "string") {
     return res.status(400).json({ error: "note must be a string." });
+  }
+  if (typeof note === "string" && note.length > TEXT_LIMITS.longText) {
+    return res.status(400).json({ error: `note must be ${TEXT_LIMITS.longText} characters or fewer.` });
   }
   if (costDate !== undefined && costDate !== null && !isValidDateOnly(costDate)) {
     return res.status(400).json({ error: "costDate must be a valid date in YYYY-MM-DD format." });

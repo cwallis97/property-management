@@ -23,6 +23,7 @@ import { recordAuditEvent, resolveActor } from "../services/auditService.js";
 import { createNotifications } from "../services/notificationService.js";
 import { resolveUrgentWorkOrderRecipients } from "../authorization/notificationRecipients.js";
 import { clampLimit, encodeCursor, decodeCursor, cursorWhereClause } from "./auditEventController.js";
+import { TEXT_LIMITS } from "../validation/text.js";
 
 // The ONLY field an assigned Technician (no WORK_ORDER_EDIT) may ever
 // submit to updateWorkOrder — see workOrderActions.js. A request from a
@@ -242,12 +243,18 @@ function validateScalarFields(body) {
     if (!body.title || typeof body.title !== "string") {
       return { error: { status: 400, body: { error: "title must be a non-empty string." } } };
     }
+    if (body.title.length > TEXT_LIMITS.name) {
+      return { error: { status: 400, body: { error: `title must be ${TEXT_LIMITS.name} characters or fewer.` } } };
+    }
     values.title = body.title;
   }
 
   if (body.description !== undefined) {
     if (body.description !== null && typeof body.description !== "string") {
       return { error: { status: 400, body: { error: "description must be a string or null." } } };
+    }
+    if (typeof body.description === "string" && body.description.length > TEXT_LIMITS.longText) {
+      return { error: { status: 400, body: { error: `description must be ${TEXT_LIMITS.longText} characters or fewer.` } } };
     }
     values.description = body.description;
   }

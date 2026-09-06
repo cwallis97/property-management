@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import { Repair, Pin, Property, SEVERITY_LEVELS, REPAIR_STATUSES } from "../models/index.js";
+import { TEXT_LIMITS } from "../validation/text.js";
 
 async function findOwnedPin(pinId, companyIds) {
   return Pin.findOne({
@@ -61,6 +62,9 @@ export async function createRepair(req, res) {
 
   if (!description || typeof description !== "string") {
     return res.status(400).json({ error: "description is required." });
+  }
+  if (description.length > TEXT_LIMITS.longText) {
+    return res.status(400).json({ error: `description must be ${TEXT_LIMITS.longText} characters or fewer.` });
   }
   if (severity !== undefined && !SEVERITY_LEVELS.includes(severity)) {
     return res.status(400).json({ error: `severity must be one of: ${SEVERITY_LEVELS.join(", ")}` });

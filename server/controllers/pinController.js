@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import { Pin, Property, Repair, PIN_TYPES } from "../models/index.js";
+import { TEXT_LIMITS } from "../validation/text.js";
 
 async function findOwnedProperty(propertyId, companyIds) {
   return Property.findOne({ where: { id: propertyId, companyId: { [Op.in]: companyIds } } });
@@ -39,6 +40,9 @@ export async function createPin(req, res) {
   }
   if (!label || typeof label !== "string") {
     return res.status(400).json({ error: "label is required." });
+  }
+  if (label.length > TEXT_LIMITS.name) {
+    return res.status(400).json({ error: `label must be ${TEXT_LIMITS.name} characters or fewer.` });
   }
   if (typeof x !== "number" || typeof y !== "number") {
     return res.status(400).json({ error: "x and y must be numbers." });

@@ -1,6 +1,8 @@
 import { Op } from "sequelize";
 import { Document, Property, Asset, WorkOrder, Vendor, User, DOCUMENT_CATEGORIES, DOCUMENT_ALLOWED_MIME_TYPES } from "../models/index.js";
 import { saveDocumentFile, deleteDocumentFile, getFilePath, acceptedExtensionsForMimeType } from "../utils/documentStorage.js";
+import { setFileResponseHeaders } from "../utils/httpFiles.js";
+import { textFieldError, TEXT_LIMITS } from "../validation/text.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 import { getAccessiblePropertyIds, requirePropertyAccess } from "../authorization/propertyAccess.js";
 import { buildDocumentAccessOr } from "../authorization/documentAccess.js";
@@ -226,6 +228,10 @@ export async function createDocument(req, res) {
   if (category !== undefined && category !== "" && !DOCUMENT_CATEGORIES.includes(category)) {
     return res.status(400).json({ error: `category must be one of: ${DOCUMENT_CATEGORIES.join(", ")}` });
   }
+  const docTextError =
+    textFieldError(name, { field: "name", max: TEXT_LIMITS.name }) ||
+    textFieldError(notes, { field: "notes", max: TEXT_LIMITS.longText, allowNull: true });
+  if (docTextError) return res.status(400).json({ error: docTextError });
 
   // Attachment target (and the companyId it proves) is resolved and
   // re-verified BEFORE the file is written to disk — an unauthorized or
@@ -268,6 +274,11 @@ export async function updateDocument(req, res) {
   if (!requireCapability(req, res, document.companyId, CAPABILITIES.DOCUMENT_MANAGE)) return;
 
   const { name, category, notes } = req.body;
+
+  const docTextError =
+    textFieldError(name, { field: "name", max: TEXT_LIMITS.name, required: name !== undefined }) ||
+    textFieldError(notes, { field: "notes", max: TEXT_LIMITS.longText, allowNull: true });
+  if (docTextError) return res.status(400).json({ error: docTextError });
 
   if (name !== undefined) {
     if (!name || typeof name !== "string") {
@@ -361,7 +372,12 @@ export async function getDocumentFile(req, res) {
   if (!document) return res.status(404).json({ error: "Document not found." });
   if (!(await requireDocumentAccess(req, res, document))) return;
 
+  // User-uploaded document: force a download (attachment) rather than let
+  // the browser render it inline, plus nosniff + no-store. The app itself
+  // fetches this as an authenticated blob and never navigates to the URL
+  // directly, so the disposition doesn't change the in-app experience.
   res.setHeader("Content-Type", document.mimeType);
+  setFileResponseHeaders(res, { originalFilename: document.originalFilename, disposition: "attachment", fallback: "document" });
   res.sendFile(getFilePath(document.storedFilename), (err) => {
     if (err && !res.headersSent) {
       res.status(404).json({ error: "Document file could not be read." });

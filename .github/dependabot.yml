@@ -1,0 +1,46 @@
+version: 2
+
+# Weekly dependency PRs for the two npm workspaces and the GitHub Actions
+# used by CI. Deliberately low-volume: a single weekly run, minor/patch
+# updates grouped into one PR per ecosystem so ordinary bumps don't
+# create noise, and a small open-PR cap. Security updates raised by
+# Dependabot alerts are separate from this schedule and are not capped.
+updates:
+  - package-ecosystem: npm
+    directory: /server
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      server-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: npm
+    directory: /client
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      client-minor-patch:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(ci)"

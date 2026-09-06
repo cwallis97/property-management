@@ -3,6 +3,7 @@ import { sequelize, Property, Pin, PROPERTY_STATUSES } from "../models/index.js"
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 import { getAccessiblePropertyIds, requirePropertyAccess } from "../authorization/propertyAccess.js";
 import { recordAuditEvent, resolveActor } from "../services/auditService.js";
+import { textFieldError, TEXT_LIMITS } from "../validation/text.js";
 
 // Defaults to active-only — the same "archived is excluded unless asked
 // for" convention every other list-with-archive-state endpoint in this app
@@ -43,6 +44,11 @@ export async function createProperty(req, res) {
   if (!name || typeof name !== "string") {
     return res.status(400).json({ error: "name is required." });
   }
+  const propTextError =
+    textFieldError(name, { field: "name", max: TEXT_LIMITS.name }) ||
+    textFieldError(address, { field: "address", max: TEXT_LIMITS.address, allowNull: true }) ||
+    textFieldError(sitePlanUrl, { field: "sitePlanUrl", max: TEXT_LIMITS.address, allowNull: true });
+  if (propTextError) return res.status(400).json({ error: propTextError });
 
   const targetCompanyId = companyId ?? req.companyIds[0];
   if (!req.companyIds.includes(targetCompanyId)) {
@@ -85,6 +91,11 @@ export async function updateProperty(req, res) {
   if (!requireCapability(req, res, property.companyId, CAPABILITIES.PROPERTY_LIFECYCLE)) return;
 
   const { name, address, sitePlanUrl, status } = req.body;
+  const propTextError =
+    textFieldError(name, { field: "name", max: TEXT_LIMITS.name, required: name !== undefined }) ||
+    textFieldError(address, { field: "address", max: TEXT_LIMITS.address, allowNull: true }) ||
+    textFieldError(sitePlanUrl, { field: "sitePlanUrl", max: TEXT_LIMITS.address, allowNull: true });
+  if (propTextError) return res.status(400).json({ error: propTextError });
   if (name !== undefined) property.name = name;
   if (address !== undefined) property.address = address;
   if (sitePlanUrl !== undefined) property.sitePlanUrl = sitePlanUrl;

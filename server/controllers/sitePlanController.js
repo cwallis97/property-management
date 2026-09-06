@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import { Property, SitePlan, WorkOrder, SITE_PLAN_ALLOWED_MIME_TYPES } from "../models/index.js";
 import { saveSitePlanFile, deleteSitePlanFile, getFilePath, acceptedExtensionsForMimeType } from "../utils/sitePlanStorage.js";
+import { setFileResponseHeaders } from "../utils/httpFiles.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 import { requirePropertyAccess } from "../authorization/propertyAccess.js";
 
@@ -97,7 +98,12 @@ export async function getSitePlanFile(req, res) {
   const sitePlan = await SitePlan.findOne({ where: { propertyId: property.id } });
   if (!sitePlan) return res.status(404).json({ error: "No site plan uploaded for this property." });
 
+  // The site plan is viewed in-app (rendered on the map canvas), so
+  // inline disposition is appropriate — still with nosniff + no-store and
+  // a sanitized filename. The MIME allowlist (PDF/PNG/JPEG) already rules
+  // out an uploaded active-content type.
   res.setHeader("Content-Type", sitePlan.mimeType);
+  setFileResponseHeaders(res, { originalFilename: sitePlan.originalFilename, disposition: "inline", fallback: "site-plan" });
   res.sendFile(getFilePath(sitePlan.storedFilename), (err) => {
     if (err && !res.headersSent) {
       res.status(404).json({ error: "Site plan file could not be read." });

@@ -1,5 +1,6 @@
 import { Company } from "../models/index.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
+import { TEXT_LIMITS } from "../validation/text.js";
 
 export function listMyCompanies(req, res) {
   const companies = req.memberships.map((m) => ({
@@ -33,6 +34,9 @@ export async function updateCompany(req, res) {
   const trimmed = typeof name === "string" ? name.trim() : "";
   if (!trimmed) {
     return res.status(400).json({ error: "name is required." });
+  }
+  if (typeof name === "string" && name.length > TEXT_LIMITS.name) {
+    return res.status(400).json({ error: `name must be ${TEXT_LIMITS.name} characters or fewer.` });
   }
 
   const company = await Company.findByPk(id);

@@ -1,14 +1,18 @@
 // src/firebase.js
+//
+// Only Firebase Authentication is used by this app. Firestore and Storage
+// were imported here historically but nothing consumes them — importing
+// them pulled the Firestore/gRPC/protobuf and Storage SDK surfaces into
+// the bundle for no reason. Keeping this file to `firebase/app` +
+// `firebase/auth` keeps the shipped code (and its dependency surface)
+// scoped to what the product actually does.
 import { initializeApp } from "firebase/app";
-import { 
-  getAuth, 
-  setPersistence, 
-  browserLocalPersistence 
-} from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 
-// ✅ Your Firebase config (already filled in correctly)
+// The Firebase Web config is a set of public client identifiers (it also
+// ships in the built bundle) — not a secret. Access is governed by the
+// Firebase project's own settings (authorized domains, Security Rules,
+// App Check), configured in the Firebase console, not here.
 const firebaseConfig = {
   apiKey: "AIzaSyCOMHD2ViZH-5lv3SxSqayLGx5tfzPCGXM",
   authDomain: "wallisworks-42c74.firebaseapp.com",
@@ -18,16 +22,11 @@ const firebaseConfig = {
   appId: "1:93784898598:web:50b49a2ce0dcb71f33bae7",
 };
 
-// ✅ Initialize Firebase core
 const app = initializeApp(firebaseConfig);
 
-// ✅ Auth setup with session persistence
+// Auth with session persistence (localStorage-backed; managed by the
+// Firebase SDK).
 const auth = getAuth(app);
 setPersistence(auth, browserLocalPersistence);
 
-// ✅ Firestore (database) + Storage (for uploads)
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-// Exports
-export { auth, db, storage };
+export { auth };

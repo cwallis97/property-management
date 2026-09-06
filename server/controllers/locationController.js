@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import { Location, Property } from "../models/index.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 import { requirePropertyAccess } from "../authorization/propertyAccess.js";
+import { textFieldError, TEXT_LIMITS } from "../validation/text.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -70,6 +71,10 @@ export async function createLocation(req, res) {
   if (!type || typeof type !== "string") {
     return res.status(400).json({ error: "type is required." });
   }
+  const locTextError =
+    textFieldError(name, { field: "name", max: TEXT_LIMITS.name }) ||
+    textFieldError(type, { field: "type", max: TEXT_LIMITS.name });
+  if (locTextError) return res.status(400).json({ error: locTextError });
 
   let resolvedParentId = null;
   if (parentLocationId !== undefined && parentLocationId !== null) {
@@ -121,6 +126,11 @@ export async function updateLocation(req, res) {
   if (!requireCapability(req, res, location.property.companyId, CAPABILITIES.LOCATION_MANAGE)) return;
 
   const { name, type, parentLocationId } = req.body;
+
+  const locTextError =
+    textFieldError(name, { field: "name", max: TEXT_LIMITS.name, required: name !== undefined }) ||
+    textFieldError(type, { field: "type", max: TEXT_LIMITS.name, required: type !== undefined });
+  if (locTextError) return res.status(400).json({ error: locTextError });
 
   if (name !== undefined) {
     if (!name || typeof name !== "string") {
