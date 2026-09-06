@@ -4,7 +4,7 @@ import { DataTypes, Model } from "sequelize";
 // to grow. Deliberately not DB-CHECK-constrained (see this table's
 // migration comment); this array is the single source of truth for
 // validating entityType at write time.
-export const ENTITY_TYPES = ["work_order", "membership", "property"];
+export const ENTITY_TYPES = ["work_order", "membership", "property", "user"];
 
 // Canonical, stable action keys — never a human-readable string. UI
 // wording (client/src/utils/auditEvents.js) may change freely without
@@ -18,6 +18,13 @@ export const AUDIT_ACTIONS = [
   "membership.property_access_changed",
   "property.archived",
   "property.restored",
+  // Access lifecycle (SOC 2 Phase 1).
+  "membership.created",
+  "membership.disabled",
+  "membership.enabled",
+  "user.disabled",
+  "user.enabled",
+  "refresh_tokens.revoked",
 ];
 
 export class AuditEvent extends Model {}

@@ -23,13 +23,19 @@ const URGENT_ELIGIBLE_ROLES = ["owner", "admin", "manager"];
 //
 // Returns `[{ membershipId, userId }]`.
 export async function resolveUrgentWorkOrderRecipients(companyId, propertyId) {
+  // Active Memberships only, and only where the owning User is not
+  // globally disabled (SOC 2 Phase 1). notificationService also applies a
+  // final central filter, but excluding here keeps the property-access
+  // loop below from doing needless work.
   const memberships = await Membership.findAll({
-    where: { companyId, role: URGENT_ELIGIBLE_ROLES },
+    where: { companyId, role: URGENT_ELIGIBLE_ROLES, disabledAt: null },
     attributes: ["id", "userId", "accessMode"],
+    include: [{ association: "user", attributes: ["id", "disabledAt"], required: true }],
   });
 
   const eligible = [];
   for (const m of memberships) {
+    if (m.user.disabledAt != null) continue;
     if (await membershipHasPropertyAccess(m, propertyId)) {
       eligible.push({ membershipId: m.id, userId: m.userId });
     }

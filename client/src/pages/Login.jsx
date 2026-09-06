@@ -1,11 +1,16 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { auth } from "../firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { useState } from "react";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
+  // SOC 2 Phase 1 — the API client redirects here with ?reason=disabled
+  // after a request is rejected because this account's access was revoked
+  // (distinct from an ordinary expired session).
+  const accessDisabled = searchParams.get("reason") === "disabled";
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -29,6 +34,11 @@ export default function Login() {
         <h2 className="text-3xl font-extrabold text-center text-white drop-shadow-lg mb-6">
           Welcome Back 👑
         </h2>
+        {accessDisabled && (
+          <div className="mb-6 rounded-xl border border-amber-300/40 bg-amber-500/15 px-4 py-3 text-sm text-amber-50">
+            Your access has been disabled. Contact your administrator.
+          </div>
+        )}
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-200">Email</label>

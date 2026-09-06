@@ -1,4 +1,5 @@
-import { Notification } from "../models/index.js";
+import { Notification, Membership } from "../models/index.js";
+import { filterActiveMembershipIds } from "../authorization/activeMembership.js";
 
 // The one place that writes Notification rows. Mirrors auditService.js:
 // makes no authorization decisions (every call site has already resolved
@@ -15,6 +16,11 @@ import { Notification } from "../models/index.js";
 //   2. RECIPIENT DE-DUPLICATION — at most one row per recipient Membership
 //      per call (a Membership that matches a resolver twice gets one
 //      notification).
+//   3. DISABLED-RECIPIENT EXCLUSION (SOC 2 Phase 1) — a Membership that is
+//      itself disabled, or whose User is globally disabled, never gets a
+//      new Notification, regardless of how the caller resolved the
+//      recipient set. The canonical check lives in
+//      authorization/activeMembership.js.
 //
 // `recipients` is `[{ membershipId, userId }]`. `dedupeKey`, when given,
 // makes the insert idempotent via the partial unique index
@@ -41,11 +47,19 @@ export async function createNotifications({
   if (!title) throw new Error("createNotifications requires a title.");
   if (!Array.isArray(recipients)) throw new Error("createNotifications requires a recipients array.");
 
+  // Drop disabled recipients centrally — one query, regardless of caller.
+  const activeIds = await filterActiveMembershipIds(
+    Membership,
+    recipients.map((r) => r?.membershipId),
+    { transaction }
+  );
+
   const seen = new Set();
   const rows = [];
   for (const r of recipients) {
     if (!r || !r.membershipId || !r.userId) continue;
     if (actorMembershipId && r.membershipId === actorMembershipId) continue; // self-suppression
+    if (!activeIds.has(r.membershipId)) continue; // disabled Membership / User
     if (seen.has(r.membershipId)) continue; // de-duplication
     seen.add(r.membershipId);
     rows.push({

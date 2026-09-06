@@ -194,9 +194,17 @@ async function resolveAssignedMembershipId(assignedMembershipId, property, compa
 
   const membership = await Membership.findOne({
     where: { id: assignedMembershipId, companyId: { [Op.in]: companyIds } },
-    include: { model: User, as: "user", attributes: ["id", "email", "displayName"] },
+    include: { model: User, as: "user", attributes: ["id", "email", "displayName", "disabledAt"] },
   });
   if (!membership) return { error: { status: 404, body: { error: "Member not found." } } };
+
+  // SOC 2 Phase 1 — a disabled Membership (or a globally disabled User) is
+  // never a valid NEW assignee. Existing assignments to a now-disabled
+  // Membership are never rewritten (see access-lifecycle.md); this only
+  // blocks assigning work to someone who no longer has access.
+  if (membership.disabledAt != null || membership.user.disabledAt != null) {
+    return { error: { status: 400, body: { error: "This member's access is disabled and they can't be assigned work." } } };
+  }
 
   const allowed = await membershipHasPropertyAccess(membership, property.id);
   if (!allowed) {
@@ -882,13 +890,17 @@ export async function getAssignableMembers(req, res) {
   if (!(await requirePropertyAccess(req, res, workOrder.property.companyId, workOrder.propertyId))) return;
   if (!requireCapability(req, res, workOrder.property.companyId, CAPABILITIES.WORK_ORDER_EDIT)) return;
 
+  // SOC 2 Phase 1 — active Memberships only, and only where the owning
+  // User is not globally disabled: a disabled person is not a selectable
+  // assignee.
   const memberships = await Membership.findAll({
-    where: { companyId: workOrder.property.companyId },
-    include: { model: User, as: "user", attributes: ["id", "email", "displayName"] },
+    where: { companyId: workOrder.property.companyId, disabledAt: null },
+    include: { model: User, as: "user", attributes: ["id", "email", "displayName", "disabledAt"], required: true },
   });
 
   const eligible = [];
   for (const membership of memberships) {
+    if (membership.user.disabledAt != null) continue;
     if (await membershipHasPropertyAccess(membership, workOrder.propertyId)) {
       eligible.push(serializeAssignee(membership));
     }

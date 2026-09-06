@@ -4,6 +4,7 @@ import SectionSpinner from "./SectionSpinner";
 import SearchableSelect from "./SearchableSelect";
 import InviteUserModal from "./InviteUserModal";
 import EditPropertyAccessModal from "./EditPropertyAccessModal";
+import ConfirmMemberStatusModal from "./ConfirmMemberStatusModal";
 import { IconAlertTriangle, IconTruck, IconPlus } from "./icons";
 import { getMembers, updateMemberRole, getPendingInvites, revokeInvite, getProperties } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
@@ -44,6 +45,8 @@ export default function SettingsUsers({ focusUserId = null }) {
   const [propertyCount, setPropertyCount] = useState(null);
 
   const [editingAccessMember, setEditingAccessMember] = useState(null);
+  // { member, intent: "disable" | "enable" } | null
+  const [statusModal, setStatusModal] = useState(null);
 
   useEffect(() => {
     getProperties({ status: "all" })
@@ -115,6 +118,19 @@ export default function SettingsUsers({ focusUserId = null }) {
     setEditingAccessMember(null);
   }
 
+  function handleStatusUpdated(updated) {
+    // Preserve the open-assignment count the list carries (the status
+    // response doesn't re-send it on re-enable).
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.membershipId === updated.membershipId
+          ? { ...m, ...updated, openAssignedWorkOrderCount: updated.openAssignedWorkOrderCount ?? m.openAssignedWorkOrderCount }
+          : m
+      )
+    );
+    setStatusModal(null);
+  }
+
   function handleInvited(invite) {
     // listPendingInvites' own shape (no token) — created's shape includes
     // the one-time token, which this list never needs to hold onto.
@@ -167,11 +183,18 @@ export default function SettingsUsers({ focusUserId = null }) {
           {members.map((member) => {
             const isOwner = member.role === "owner";
             const isSelf = member.userId === user?.id;
-            const locked = isOwner || isSelf;
+            const isDisabled = member.status === "disabled";
+            // Role / access edits are locked for the owner row, your own
+            // row, and any disabled member (re-enable them first — the
+            // server enforces this too).
+            const locked = isOwner || isSelf || isDisabled;
             // Owner and Admin are always unrestricted (see Property Access
             // V1's role semantics) — access is only ever actually editable
             // for a Manager or Technician, and never for your own row.
-            const accessLocked = isOwner || member.role === "admin" || isSelf;
+            const accessLocked = isOwner || member.role === "admin" || isSelf || isDisabled;
+            // The disable / re-enable action is available for anyone who
+            // isn't the owner and isn't you (this page is Owner/Admin-only).
+            const canChangeStatus = !isOwner && !isSelf;
             const accessSummary =
               member.accessMode === "restricted"
                 ? `${member.propertyIds?.length ?? 0} of ${propertyCount ?? "…"} Properties`
@@ -186,14 +209,19 @@ export default function SettingsUsers({ focusUserId = null }) {
                 }`}
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-ink">
-                    {member.name}
-                    {isSelf && <span className="ml-1.5 text-xs font-normal text-ink-muted">(you)</span>}
+                  <p className="flex items-center gap-2 truncate text-sm font-medium text-ink">
+                    <span className="truncate">{member.name}</span>
+                    {isSelf && <span className="text-xs font-normal text-ink-muted">(you)</span>}
+                    {isDisabled && (
+                      <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700 dark:bg-red-500/15 dark:text-red-400">
+                        Disabled
+                      </span>
+                    )}
                   </p>
                   <p className="truncate text-xs text-ink-secondary">{member.email}</p>
                 </div>
 
-                <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                <div className={`flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center ${isDisabled ? "opacity-60" : ""}`}>
                   <div className="w-full sm:w-44">
                     {locked ? (
                       <SearchableSelect
@@ -201,7 +229,13 @@ export default function SettingsUsers({ focusUserId = null }) {
                         onChange={() => {}}
                         options={[{ value: member.role, label: roleLabel[member.role] || member.role, sublabel: null }]}
                         disabled
-                        disabledHint={isOwner ? "Owner role can't be changed" : "You can't change your own role"}
+                        disabledHint={
+                          isDisabled
+                            ? "Re-enable this member to change their role"
+                            : isOwner
+                            ? "Owner role can't be changed"
+                            : "You can't change your own role"
+                        }
                       />
                     ) : (
                       <SearchableSelect
@@ -218,12 +252,14 @@ export default function SettingsUsers({ focusUserId = null }) {
                       <p
                         className="truncate px-1 text-sm text-ink-muted"
                         title={
-                          isOwner || member.role === "admin"
+                          isDisabled
+                            ? "Re-enable this member to change their property access"
+                            : isOwner || member.role === "admin"
                             ? "Owner and Admin always have access to every property"
                             : "You can't change your own property access"
                         }
                       >
-                        All Properties
+                        {accessSummary}
                       </p>
                     ) : (
                       <button
@@ -235,6 +271,22 @@ export default function SettingsUsers({ focusUserId = null }) {
                       </button>
                     )}
                   </div>
+
+                  {canChangeStatus && (
+                    <div className="w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => setStatusModal({ member, intent: isDisabled ? "enable" : "disable" })}
+                        className={`w-full rounded-lg px-3 py-2 text-sm font-medium transition sm:w-auto ${
+                          isDisabled
+                            ? "text-accent-ink hover:bg-surface-subtle"
+                            : "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                        }`}
+                      >
+                        {isDisabled ? "Re-enable access" : "Disable access"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -281,6 +333,15 @@ export default function SettingsUsers({ focusUserId = null }) {
           member={editingAccessMember}
           onClose={() => setEditingAccessMember(null)}
           onUpdated={handleAccessUpdated}
+        />
+      )}
+
+      {statusModal && (
+        <ConfirmMemberStatusModal
+          member={statusModal.member}
+          intent={statusModal.intent}
+          onClose={() => setStatusModal(null)}
+          onUpdated={handleStatusUpdated}
         />
       )}
     </div>

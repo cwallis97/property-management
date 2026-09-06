@@ -29,6 +29,15 @@ export function initMembershipModel(sequelize) {
         field: "access_mode",
         validate: { isIn: [MEMBERSHIP_ACCESS_MODES] },
       },
+      // Per-Company access revocation (SOC 2 Phase 1). Non-null = this
+      // Membership grants nothing (no role/capabilities, Property Access,
+      // search scope, reports, notifications, assignment eligibility).
+      // The person's Memberships in OTHER Companies are unaffected.
+      // requireAuth loads only `disabled_at IS NULL` Memberships, so a
+      // disabled one is simply absent from req.memberships. role /
+      // accessMode / PropertyAccess rows are preserved while disabled and
+      // restored verbatim on re-enable.
+      disabledAt: { type: DataTypes.DATE, allowNull: true, field: "disabled_at" },
     },
     {
       sequelize,

@@ -1,5 +1,5 @@
-import { Op } from "sequelize";
-import { sequelize, Membership, User, Property, PropertyAccess, MEMBERSHIP_ACCESS_MODES } from "../models/index.js";
+import { Op, fn, col } from "sequelize";
+import { sequelize, Membership, User, Property, PropertyAccess, WorkOrder, MEMBERSHIP_ACCESS_MODES } from "../models/index.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
 import { recordAuditEvent, resolveActor } from "../services/auditService.js";
 import { createNotifications } from "../services/notificationService.js";
@@ -59,7 +59,23 @@ function serializeMember(membership) {
     role: membership.role,
     accessMode: membership.accessMode,
     propertyIds: membership.accessMode === "restricted" ? (membership.propertyAccess ?? []).map((pa) => pa.propertyId) : null,
+    // SOC 2 Phase 1 — "active" | "disabled". A disabled Membership keeps
+    // its role / accessMode / propertyIds (they are restored verbatim on
+    // re-enable) but grants none of it while disabled.
+    status: membership.disabledAt != null ? "disabled" : "active",
   };
+}
+
+// Role and Property-Access edits are rejected on a disabled Membership —
+// re-enable it first. Disabling deliberately preserves the configuration
+// as-is, and letting it be edited while inert is a confusing state with
+// no product value in Phase 1.
+function rejectIfDisabled(membership, res) {
+  if (membership.disabledAt != null) {
+    res.status(409).json({ error: "This member's access is disabled. Re-enable them before changing their role or access." });
+    return true;
+  }
+  return false;
 }
 
 export async function listCompanyMembers(req, res) {
@@ -75,7 +91,31 @@ export async function listCompanyMembers(req, res) {
     order: [["createdAt", "ASC"]],
   });
 
-  res.json(members.map(serializeMember));
+  // Open-assignment count per member in ONE grouped query — shown so an
+  // admin about to disable someone can see what's still assigned to them
+  // (SOC 2 Phase 1). Never a blocker on disable; just information.
+  const membershipIds = members.map((m) => m.id);
+  const openByMembership = {};
+  if (membershipIds.length) {
+    const rows = await WorkOrder.findAll({
+      attributes: ["assignedMembershipId", [fn("COUNT", col("id")), "count"]],
+      where: {
+        assignedMembershipId: { [Op.in]: membershipIds },
+        archivedAt: null,
+        status: { [Op.ne]: "completed" },
+      },
+      group: ["assignedMembershipId"],
+      raw: true,
+    });
+    for (const r of rows) openByMembership[r.assignedMembershipId] = Number(r.count);
+  }
+
+  res.json(
+    members.map((m) => ({
+      ...serializeMember(m),
+      openAssignedWorkOrderCount: openByMembership[m.id] ?? 0,
+    }))
+  );
 }
 
 export async function updateMemberRole(req, res) {
@@ -97,6 +137,7 @@ export async function updateMemberRole(req, res) {
   if (!membership) return res.status(404).json({ error: "Member not found." });
 
   if (!requireCapability(req, res, membership.companyId, CAPABILITIES.USERS_MANAGE)) return;
+  if (rejectIfDisabled(membership, res)) return;
 
   const { role } = req.body;
   if (!EDITABLE_ROLES.includes(role)) {
@@ -214,6 +255,7 @@ export async function updateMemberPropertyAccess(req, res) {
   if (!membership) return res.status(404).json({ error: "Member not found." });
 
   if (!requireCapability(req, res, membership.companyId, CAPABILITIES.USERS_MANAGE)) return;
+  if (rejectIfDisabled(membership, res)) return;
 
   if (membership.role === "owner" || membership.role === "admin") {
     return res.status(400).json({ error: "Owner and Admin always have access to every property." });

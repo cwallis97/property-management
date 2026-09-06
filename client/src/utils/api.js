@@ -27,11 +27,29 @@ async function getAuthToken() {
   return user.getIdToken();
 }
 
+// SOC 2 Phase 1 — when the server reports that this account's access has
+// been revoked (a distinct 403 `code`, not an expired session), fail
+// closed hard: sign the Firebase session out and send the user to the
+// login page with a clear reason. Guarded so concurrent failing requests
+// only trigger it once. A full-page navigation (not the router) breaks
+// any possible redirect loop, and /login makes no authenticated calls.
+let accessDisabledHandled = false;
+function handleAccessDisabled() {
+  if (accessDisabledHandled) return;
+  accessDisabledHandled = true;
+  auth.signOut().catch(() => {});
+  window.location.assign("/login?reason=disabled");
+}
+
 async function throwIfNotOk(res) {
   if (res.ok) return;
   const body = await res.json().catch(() => null);
+  if (res.status === 403 && body?.code === "ACCESS_DISABLED") {
+    handleAccessDisabled();
+  }
   const error = new Error(body?.error || `Request failed with status ${res.status}`);
   error.status = res.status;
+  error.code = body?.code;
   throw error;
 }
 
@@ -142,6 +160,16 @@ export function updateMemberRole(membershipId, role) {
 export function updateMemberPropertyAccess(membershipId, payload) {
   return apiFetch(`/api/members/${membershipId}/property-access`, {
     method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+// SOC 2 Phase 1 — disable / re-enable a member's access to this Company.
+// payload: { status: "disabled" | "active", reason?: string }
+// On disable the response also carries `activeAssignedWorkOrderCount`.
+export function updateMemberStatus(membershipId, payload) {
+  return apiFetch(`/api/members/${membershipId}/status`, {
+    method: "PATCH",
     body: JSON.stringify(payload),
   });
 }

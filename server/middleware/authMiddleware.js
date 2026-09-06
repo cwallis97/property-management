@@ -70,6 +70,19 @@ function verifyFirebaseUser(req) {
             },
           });
 
+          // Global account kill switch (SOC 2 Phase 1). Fail closed
+          // BEFORE any email sync or Company/Membership work — a globally
+          // disabled person has no access to anything, including
+          // accepting an invitation. The distinct `code` lets the client
+          // tell "your access was revoked" apart from "your session
+          // expired" and sign the user out with a clear message.
+          if (user.disabledAt != null) {
+            const disabledErr = new Error("Your access has been disabled. Contact your administrator.");
+            disabledErr.status = 403;
+            disabledErr.code = "ACCESS_DISABLED";
+            return reject(disabledErr);
+          }
+
           if (decoded.email && user.email !== decoded.email) {
             user.email = decoded.email;
             await user.save();
@@ -92,12 +105,31 @@ function verifyFirebaseUser(req) {
 export function requireAuth(req, res, next) {
   verifyFirebaseUser(req)
     .then(async (user) => {
+      // Only ACTIVE Memberships (SOC 2 Phase 1) — a Membership with
+      // disabled_at set grants nothing and must never appear in
+      // req.memberships. This one filter is the canonical enforcement
+      // point: capability resolution, Property Access, search scope,
+      // reports, documents, and actor resolution all read req.memberships,
+      // so none of them need their own disabled check.
       let memberships = await Membership.findAll({
-        where: { userId: user.id },
+        where: { userId: user.id, disabledAt: null },
         include: { model: Company, as: "company" },
       });
 
+      // Auto-provision a first Company ONLY for a genuinely new person who
+      // has never had any Membership. A user whose every Membership is
+      // disabled has zero ACTIVE ones but must NOT be handed a fresh
+      // throwaway Company on their next login — their access to the
+      // Company they belonged to was revoked, so fail closed with the
+      // same ACCESS_DISABLED signal a globally disabled user gets.
       if (memberships.length === 0) {
+        const everHadMembership = await Membership.count({ where: { userId: user.id } });
+        if (everHadMembership > 0) {
+          return res.status(403).json({
+            error: "Your access has been disabled. Contact your administrator.",
+            code: "ACCESS_DISABLED",
+          });
+        }
         memberships = await sequelize.transaction(async (t) => {
           const company = await Company.create(
             { name: `${user.displayName || user.email}'s Company` },
@@ -118,7 +150,11 @@ export function requireAuth(req, res, next) {
       next();
     })
     .catch((err) => {
-      if (err.status) return res.status(err.status).json({ error: err.message });
+      if (err.status) {
+        const body = { error: err.message };
+        if (err.code) body.code = err.code;
+        return res.status(err.status).json(body);
+      }
       next(err);
     });
 }
@@ -139,7 +175,11 @@ export function requireFirebaseUser(req, res, next) {
       next();
     })
     .catch((err) => {
-      if (err.status) return res.status(err.status).json({ error: err.message });
+      if (err.status) {
+        const body = { error: err.message };
+        if (err.code) body.code = err.code;
+        return res.status(err.status).json(body);
+      }
       next(err);
     });
 }

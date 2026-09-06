@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { Op } from "sequelize";
 import { sequelize, Invitation, Membership, User, Company, Property, PropertyAccess, INVITE_ROLES } from "../models/index.js";
 import { CAPABILITIES, requireCapability } from "../authorization/capabilities.js";
+import { recordAuditEvent } from "../services/auditService.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -100,13 +101,31 @@ export async function createInvite(req, res) {
     propertyIds = uniqueIds;
   }
 
-  // Already a member of this Company under that email?
+  // Already a member of this Company under that email? (any state — a
+  // disabled Membership still means "this person is known to your company"
+  // and must be RE-ENABLED, never shadowed by a fresh invite that would
+  // create a duplicate Membership on acceptance.)
   const existingMember = await Membership.findOne({
     where: { companyId },
-    include: { model: User, as: "user", where: { email }, attributes: [] },
+    include: { model: User, as: "user", where: { email }, attributes: ["id", "disabledAt"] },
   });
   if (existingMember) {
+    if (existingMember.disabledAt != null) {
+      return res.status(409).json({
+        error: "This person's access to your company is currently disabled. Re-enable their access instead of sending a new invitation.",
+      });
+    }
     return res.status(409).json({ error: "This person is already a member of your company." });
+  }
+
+  // A globally disabled account cannot be invited anywhere — it must be
+  // re-enabled first (an explicit administrative decision, never a side
+  // effect of accepting an invite).
+  const disabledAccount = await User.findOne({ where: { email, disabledAt: { [Op.ne]: null } }, attributes: ["id"] });
+  if (disabledAccount) {
+    return res.status(409).json({
+      error: "This person's PropertyOS account is disabled. It must be re-enabled before they can be invited.",
+    });
   }
 
   // A still-valid pending invite for the same email already exists —
@@ -213,6 +232,19 @@ export async function acceptInvite(req, res) {
     where: { userId: req.user.id, companyId: invitation.companyId },
   });
 
+  // SOC 2 Phase 1 — accepting an invite must NEVER silently re-enable a
+  // Membership an admin deliberately disabled. Re-enabling access is an
+  // explicit administrative action (PATCH /api/members/:id/status), not a
+  // side effect of clicking an invite link. (A globally disabled User
+  // never reaches this point — authMiddleware 403s them first.)
+  if (existingMembership && existingMembership.disabledAt != null) {
+    return res.status(403).json({
+      error: "Your access to this company has been disabled. Ask an administrator to re-enable it.",
+      code: "ACCESS_DISABLED",
+    });
+  }
+
+  let createdMembership = false;
   if (!existingMembership) {
     // Re-validated against the Company now, not trusted as still-true from
     // whenever the invite was created — a selected Property could have
@@ -247,11 +279,34 @@ export async function acceptInvite(req, res) {
           { transaction: t }
         );
       }
+
+      // Audit the access grant (SOC 2 Phase 1). The actor IS the new
+      // member — a self-service join through a valid, unrevoked, unexpired
+      // invitation for their own email. entityLabel is their own name.
+      await recordAuditEvent({
+        transaction: t,
+        companyId: invitation.companyId,
+        actor: {
+          membershipId: existingMembership.id,
+          userId: req.user.id,
+          role: invitation.role,
+          name: req.user.displayName || req.user.email || null,
+          email: req.user.email || null,
+        },
+        action: "membership.created",
+        entityType: "membership",
+        entityId: existingMembership.id,
+        entityLabel: req.user.displayName || req.user.email || "New member",
+        after: { role: invitation.role, accessMode },
+        metadata: { via: "invitation", invitationId: invitation.id },
+      });
     });
+    createdMembership = true;
   }
 
   invitation.acceptedAt = new Date();
   await invitation.save();
+  void createdMembership;
 
   res.json({
     companyId: invitation.companyId,
